@@ -25,17 +25,6 @@ async def connect_to_database() -> asyncpg.Pool:
             print(f"Waiting for PostgreSQL (attempt {attempt}/10)...")
             await asyncio.sleep(2)
 
-    # Ensure items table exists
-    async with pool.acquire() as conn:
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS items (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(100) NOT NULL,
-                price NUMERIC(10, 2) NOT NULL,
-                is_offer BOOLEAN DEFAULT FALSE,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
     return pool
 
 

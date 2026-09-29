@@ -28,19 +28,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Start backing services and API
-        run: docker compose up -d --build db redis localstack mailpit api
-
-      - name: Wait for API to be ready
-        run: |
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:8000/ > /dev/null; then
-              echo "API is up"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "API did not become ready in time"
-          exit 1
+        run: docker compose up -d --build --wait db redis localstack mailpit api
 
       - name: Run database migrations
         run: docker compose run --rm migration

@@ -2,12 +2,12 @@
 Unified AWS Services Integration for LocalStack.
 Provides a class-based AWSService managing SQS, DynamoDB, Secrets Manager, Lambda, EventBridge, and Kinesis.
 """
-from functools import cached_property
 import io
 import json
-from typing import Any
 import urllib.request
 import zipfile
+from functools import cached_property
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError

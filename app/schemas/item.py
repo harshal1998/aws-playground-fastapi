@@ -1,11 +1,11 @@
 from typing import List
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ItemBase(BaseModel):
     name: str
-    price: float
+    price: float = Field(gt=0, description="Price must be greater than 0")
     is_offer: bool = False
 
 

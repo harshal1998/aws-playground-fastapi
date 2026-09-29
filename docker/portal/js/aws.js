@@ -52,12 +52,17 @@
               <a href="/api/s3/file?key=${encodeURIComponent(obj.key)}" target="_blank" class="ctrl-btn" style="padding: 4px 8px; font-size: 11px;">
                 Download
               </a>
-              <button class="ctrl-btn ctrl-btn-danger" onclick="deleteS3File('${escapeHtml(obj.key)}')">
+              <button class="ctrl-btn ctrl-btn-danger" data-action="delete-s3-file" data-key="${escapeHtml(obj.key)}">
                 Delete
               </button>
             </td>
           </tr>
         `).join('');
+        tbody.onclick = (e) => {
+          const btn = e.target.closest('button[data-action]');
+          if (!btn) return;
+          if (btn.dataset.action === 'delete-s3-file') deleteS3File(btn.dataset.key);
+        };
       } catch (err) {
         tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #fb7185; padding: 20px;">Could not connect to S3: ${err.message}</td></tr>`;
       }
@@ -144,15 +149,21 @@
             <td><span class="aws-tag">${q.messages} msg</span></td>
             <td><span style="color: var(--text-muted);">${q.in_flight}</span></td>
             <td style="text-align: right;">
-              <button class="ctrl-btn" style="padding: 4px 8px; font-size: 11px;" onclick="readSQSMessages('${escapeHtml(q.name)}')">
+              <button class="ctrl-btn" style="padding: 4px 8px; font-size: 11px;" data-action="read-sqs" data-name="${escapeHtml(q.name)}">
                 Read Messages
               </button>
-              <button class="ctrl-btn ctrl-btn-danger" onclick="purgeSQSQueue('${escapeHtml(q.name)}')">
+              <button class="ctrl-btn ctrl-btn-danger" data-action="purge-sqs" data-name="${escapeHtml(q.name)}">
                 Purge
               </button>
             </td>
           </tr>
         `).join('');
+        tbody.onclick = (e) => {
+          const btn = e.target.closest('button[data-action]');
+          if (!btn) return;
+          if (btn.dataset.action === 'read-sqs') readSQSMessages(btn.dataset.name);
+          else if (btn.dataset.action === 'purge-sqs') purgeSQSQueue(btn.dataset.name);
+        };
 
         select.innerHTML = queues.map(q => `<option value="${escapeHtml(q.name)}">${escapeHtml(q.name)}</option>`).join('');
       } catch (err) {
@@ -262,15 +273,21 @@
             <td><span class="mono-cell" style="color: var(--accent-amber);">${escapeHtml(t.partition_key || 'id')}</span></td>
             <td>${t.item_count} items</td>
             <td style="text-align: right;">
-              <button class="ctrl-btn ctrl-btn-primary" style="padding: 4px 8px; font-size: 11px;" onclick="scanDynamoTable('${escapeHtml(t.name)}', '${escapeHtml(t.partition_key || 'id')}')">
+              <button class="ctrl-btn ctrl-btn-primary" style="padding: 4px 8px; font-size: 11px;" data-action="scan-dynamo" data-name="${escapeHtml(t.name)}" data-partition-key="${escapeHtml(t.partition_key || 'id')}">
                 Scan Records
               </button>
-              <button class="ctrl-btn ctrl-btn-danger" onclick="deleteDynamoTable('${escapeHtml(t.name)}')">
+              <button class="ctrl-btn ctrl-btn-danger" data-action="delete-dynamo-table" data-name="${escapeHtml(t.name)}">
                 Delete
               </button>
             </td>
           </tr>
         `).join('');
+        tbody.onclick = (e) => {
+          const btn = e.target.closest('button[data-action]');
+          if (!btn) return;
+          if (btn.dataset.action === 'scan-dynamo') scanDynamoTable(btn.dataset.name, btn.dataset.partitionKey);
+          else if (btn.dataset.action === 'delete-dynamo-table') deleteDynamoTable(btn.dataset.name);
+        };
       } catch (err) {
         tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #fb7185; padding: 20px;">Error: ${err.message}</td></tr>`;
       }
@@ -375,13 +392,18 @@
                 <button class="ctrl-btn" style="padding: 4px 8px; font-size: 11px; margin-right: 6px; background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.3); color: #38bdf8;" onclick="openEditDynamoItemModal(${idx})">
                   ✏️ Edit
                 </button>
-                <button class="ctrl-btn ctrl-btn-danger" onclick="deleteDynamoItem('${escapeHtml(String(keyVal))}')">
+                <button class="ctrl-btn ctrl-btn-danger" data-action="delete-dynamo-item" data-key="${escapeHtml(String(keyVal))}">
                   Delete
                 </button>
               </td>
             </tr>
           `;
         }).join('');
+        tbody.onclick = (e) => {
+          const btn = e.target.closest('button[data-action]');
+          if (!btn) return;
+          if (btn.dataset.action === 'delete-dynamo-item') deleteDynamoItem(btn.dataset.key);
+        };
       } catch (err) {
         tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #fb7185; padding: 18px;">Error: ${err.message}</td></tr>`;
         document.getElementById('dynamo-items-json').innerText = `Error: ${err.message}`;
@@ -538,12 +560,17 @@
             <td class="mono-cell">${escapeHtml(s.name)}</td>
             <td style="color: var(--text-muted); font-size: 11.5px; font-family: 'JetBrains Mono', monospace;">${escapeHtml(s.arn || '-')}</td>
             <td style="text-align: right;">
-              <button class="ctrl-btn ctrl-btn-primary" style="padding: 4px 8px; font-size: 11px;" onclick="viewSecretValue('${escapeHtml(s.name)}')">
+              <button class="ctrl-btn ctrl-btn-primary" style="padding: 4px 8px; font-size: 11px;" data-action="view-secret" data-name="${escapeHtml(s.name)}">
                 Reveal
               </button>
             </td>
           </tr>
         `).join('');
+        tbody.onclick = (e) => {
+          const btn = e.target.closest('button[data-action]');
+          if (!btn) return;
+          if (btn.dataset.action === 'view-secret') viewSecretValue(btn.dataset.name);
+        };
       } catch (err) {
         tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #fb7185; padding: 20px;">Error: ${err.message}</td></tr>`;
       }
@@ -617,15 +644,21 @@
             <td>${Math.round(fn.code_size / 1024)} KB</td>
             <td style="color: var(--text-muted); font-size: 11.5px;">${escapeHtml(fn.last_modified ? fn.last_modified.split('.')[0] : '-')}</td>
             <td style="text-align: right; white-space: nowrap;">
-              <button class="ctrl-btn ctrl-btn-primary" style="padding: 4px 8px; font-size: 11px; margin-right: 6px;" onclick="openInvokeLambdaModal('${escapeHtml(fn.name)}')">
+              <button class="ctrl-btn ctrl-btn-primary" style="padding: 4px 8px; font-size: 11px; margin-right: 6px;" data-action="invoke-lambda" data-name="${escapeHtml(fn.name)}">
                 ⚡ Invoke
               </button>
-              <button class="ctrl-btn ctrl-btn-danger" onclick="deleteLambdaFunction('${escapeHtml(fn.name)}')">
+              <button class="ctrl-btn ctrl-btn-danger" data-action="delete-lambda" data-name="${escapeHtml(fn.name)}">
                 Delete
               </button>
             </td>
           </tr>
         `).join('');
+        tbody.onclick = (e) => {
+          const btn = e.target.closest('button[data-action]');
+          if (!btn) return;
+          if (btn.dataset.action === 'invoke-lambda') openInvokeLambdaModal(btn.dataset.name);
+          else if (btn.dataset.action === 'delete-lambda') deleteLambdaFunction(btn.dataset.name);
+        };
       } catch (err) {
         if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #fb7185; padding: 20px;">Error: ${err.message}</td></tr>`;
       }
@@ -765,12 +798,17 @@
             <td class="mono-cell" style="font-weight: 600; color: #a78bfa;">${escapeHtml(b.name)}</td>
             <td style="font-size: 11.5px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">${escapeHtml(b.arn || '-')}</td>
             <td style="text-align: right;">
-              <button class="ctrl-btn ctrl-btn-primary" style="padding: 4px 8px; font-size: 11px;" onclick="openPutEventModal('${escapeHtml(b.name)}')">
+              <button class="ctrl-btn ctrl-btn-primary" style="padding: 4px 8px; font-size: 11px;" data-action="put-event" data-name="${escapeHtml(b.name)}">
                 📨 Send Event
               </button>
             </td>
           </tr>
         `).join('');
+        tbody.onclick = (e) => {
+          const btn = e.target.closest('button[data-action]');
+          if (!btn) return;
+          if (btn.dataset.action === 'put-event') openPutEventModal(btn.dataset.name);
+        };
 
         fetchEventRules();
       } catch (err) {
@@ -864,18 +902,25 @@
             <td><span class="aws-tag" style="background: rgba(52, 211, 153, 0.15); color: #34d399;">${escapeHtml(s.status)}</span></td>
             <td>${s.open_shards} shard${s.open_shards > 1 ? 's' : ''}</td>
             <td style="text-align: right; white-space: nowrap;">
-              <button class="ctrl-btn ctrl-btn-primary" style="padding: 4px 8px; font-size: 11px; margin-right: 6px;" onclick="openPutKinesisRecordModal('${escapeHtml(s.name)}')">
+              <button class="ctrl-btn ctrl-btn-primary" style="padding: 4px 8px; font-size: 11px; margin-right: 6px;" data-action="put-kinesis" data-name="${escapeHtml(s.name)}">
                 ➕ Put Record
               </button>
-              <button class="ctrl-btn" style="padding: 4px 8px; font-size: 11px; margin-right: 6px;" onclick="readKinesisRecords('${escapeHtml(s.name)}')">
+              <button class="ctrl-btn" style="padding: 4px 8px; font-size: 11px; margin-right: 6px;" data-action="read-kinesis" data-name="${escapeHtml(s.name)}">
                 📖 Read Records
               </button>
-              <button class="ctrl-btn ctrl-btn-danger" onclick="deleteKinesisStream('${escapeHtml(s.name)}')">
+              <button class="ctrl-btn ctrl-btn-danger" data-action="delete-kinesis" data-name="${escapeHtml(s.name)}">
                 Delete
               </button>
             </td>
           </tr>
         `).join('');
+        tbody.onclick = (e) => {
+          const btn = e.target.closest('button[data-action]');
+          if (!btn) return;
+          if (btn.dataset.action === 'put-kinesis') openPutKinesisRecordModal(btn.dataset.name);
+          else if (btn.dataset.action === 'read-kinesis') readKinesisRecords(btn.dataset.name);
+          else if (btn.dataset.action === 'delete-kinesis') deleteKinesisStream(btn.dataset.name);
+        };
       } catch (err) {
         if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #fb7185; padding: 20px;">Error: ${err.message}</td></tr>`;
       }

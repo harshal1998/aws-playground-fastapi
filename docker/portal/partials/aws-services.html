@@ -1,0 +1,627 @@
+    <!-- ========================================================================= -->
+    <!-- TAB 2: AWS SERVICES (LOCALSTACK)                                          -->
+    <!-- ========================================================================= -->
+    <div id="view-aws" class="tab-content">
+      <!-- AWS Banner -->
+      <div class="aws-banner">
+        <div class="aws-banner-left">
+          <div class="aws-banner-icon">☁️</div>
+          <div>
+            <div class="aws-banner-title">
+              LocalStack AWS Cloud Services
+              <span class="brand-badge" id="aws-health-indicator">Checking...</span>
+            </div>
+            <div class="aws-banner-desc">Local emulated AWS runtime on port 4566. Zero AWS charges, full offline compatibility.</div>
+            <div class="aws-service-tags" id="aws-service-tags">
+              <span class="aws-tag">S3</span>
+              <span class="aws-tag">SQS</span>
+              <span class="aws-tag">SNS</span>
+              <span class="aws-tag">DynamoDB</span>
+              <span class="aws-tag">SecretsManager</span>
+              <span class="aws-tag">SSM</span>
+            </div>
+          </div>
+        </div>
+        <div class="aws-banner-actions">
+          <a href="http://localhost:8085" target="_blank" class="ctrl-btn ctrl-btn-primary">
+            <span>🖥️</span> Open S3 Browser (Port 8085) &rarr;
+          </a>
+          <button class="ctrl-btn" onclick="openHealthJsonModal()">
+            <span>🔍</span> LocalStack Health JSON
+          </button>
+          <a href="http://localhost:4566/_localstack/health" target="_blank" rel="noreferrer" class="ctrl-btn">
+            <span>🌐</span> Direct Raw URL &rarr;
+          </a>
+        </div>
+      </div>
+
+      <!-- AWS Overview Cards Grid -->
+      <div class="grid">
+        <!-- 1. S3 Browser UI -->
+        <div class="card" style="--card-accent: #06b6d4;">
+          <div>
+            <div class="card-header">
+              <div class="card-icon" style="color: #06b6d4;">🗂️</div>
+              <span class="card-tag">Object Storage</span>
+            </div>
+            <h2 class="card-title">S3 Browser UI (Sairo)</h2>
+            <p class="card-desc">Dedicated web client for LocalStack S3. Browse prefix trees, preview documents, search, and download.</p>
+            <div class="card-meta">
+              <div class="meta-row">
+                <span class="meta-label">Port:</span>
+                <span class="meta-value">8085</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">Credentials:</span>
+                <span class="meta-value">admin / admin</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <a href="http://localhost:8085" target="_blank" class="btn btn-primary">Launch S3 Browser &rarr;</a>
+            <button onclick="setAwsSubtab('s3', true)" class="btn btn-secondary">In-Portal S3 &darr;</button>
+          </div>
+        </div>
+
+        <!-- 2. SQS Message Queues -->
+        <div class="card" style="--card-accent: #ec4899;">
+          <div>
+            <div class="card-header">
+              <div class="card-icon" style="color: #ec4899;">📬</div>
+              <span class="card-tag">Message Queues</span>
+            </div>
+            <h2 class="card-title">Amazon SQS Queues</h2>
+            <p class="card-desc">Decoupled asynchronous worker queues. Send payloads, monitor queue depths, and inspect messages.</p>
+            <div class="card-meta">
+              <div class="meta-row">
+                <span class="meta-label">Active Queues:</span>
+                <span class="meta-value" id="card-sqs-count">Loading...</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">Endpoint:</span>
+                <span class="meta-value">localstack:4566</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button onclick="setAwsSubtab('sqs', true)" class="btn btn-primary">Manage SQS Queues &darr;</button>
+          </div>
+        </div>
+
+        <!-- 3. DynamoDB NoSQL -->
+        <div class="card" style="--card-accent: #3b82f6;">
+          <div>
+            <div class="card-header">
+              <div class="card-icon" style="color: #3b82f6;">🗄️</div>
+              <span class="card-tag">NoSQL Database</span>
+            </div>
+            <h2 class="card-title">DynamoDB Tables</h2>
+            <p class="card-desc">Fast, key-value and document database service. Inspect tables, insert records, and scan JSON items.</p>
+            <div class="card-meta">
+              <div class="meta-row">
+                <span class="meta-label">Active Tables:</span>
+                <span class="meta-value" id="card-dynamo-count">Loading...</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">Billing:</span>
+                <span class="meta-value">PAY_PER_REQUEST</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button onclick="setAwsSubtab('dynamodb', true)" class="btn btn-primary">Explore DynamoDB &darr;</button>
+          </div>
+        </div>
+
+        <!-- 4. Secrets Manager & SSM -->
+        <div class="card" style="--card-accent: #10b981;">
+          <div>
+            <div class="card-header">
+              <div class="card-icon" style="color: #10b981;">🔐</div>
+              <span class="card-tag">Configuration</span>
+            </div>
+            <h2 class="card-title">Secrets Manager</h2>
+            <p class="card-desc">Secure credential store for API keys, database credentials, and application parameters.</p>
+            <div class="card-meta">
+              <div class="meta-row">
+                <span class="meta-label">Active Secrets:</span>
+                <span class="meta-value" id="card-secrets-count">Loading...</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">Region:</span>
+                <span class="meta-value">us-east-1</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button onclick="setAwsSubtab('secrets', true)" class="btn btn-primary">Manage Secrets &darr;</button>
+          </div>
+        </div>
+
+        <!-- 5. AWS Lambda -->
+        <div class="card" style="--card-accent: #f59e0b;">
+          <div>
+            <div class="card-header">
+              <div class="card-icon" style="color: #f59e0b;">⚡</div>
+              <span class="card-tag">Serverless FaaS</span>
+            </div>
+            <h2 class="card-title">AWS Lambda</h2>
+            <p class="card-desc">Deploy and execute serverless Python functions in isolated local containers on-demand.</p>
+            <div class="card-meta">
+              <div class="meta-row">
+                <span class="meta-label">Functions:</span>
+                <span class="meta-value" id="card-lambda-count">Loading...</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">Runtime:</span>
+                <span class="meta-value">Python 3.11</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button onclick="setAwsSubtab('lambda', true)" class="btn btn-primary">Explore Lambda &darr;</button>
+          </div>
+        </div>
+
+        <!-- 6. Amazon EventBridge -->
+        <div class="card" style="--card-accent: #8b5cf6;">
+          <div>
+            <div class="card-header">
+              <div class="card-icon" style="color: #8b5cf6;">🎯</div>
+              <span class="card-tag">Event Mesh</span>
+            </div>
+            <h2 class="card-title">EventBridge</h2>
+            <p class="card-desc">Serverless event bus that connects application events, decoupled services, and custom routing rules.</p>
+            <div class="card-meta">
+              <div class="meta-row">
+                <span class="meta-label">Event Buses:</span>
+                <span class="meta-value" id="card-events-count">Loading...</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">Default Bus:</span>
+                <span class="meta-value">default</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button onclick="setAwsSubtab('events', true)" class="btn btn-primary">Explore EventBridge &darr;</button>
+          </div>
+        </div>
+
+        <!-- 7. Amazon Kinesis -->
+        <div class="card" style="--card-accent: #06b6d4;">
+          <div>
+            <div class="card-header">
+              <div class="card-icon" style="color: #06b6d4;">🌊</div>
+              <span class="card-tag">Event Streaming</span>
+            </div>
+            <h2 class="card-title">Kinesis Streams</h2>
+            <p class="card-desc">Real-time data streaming engine. Ingest clickstreams, financial transactions, and partitioned data records.</p>
+            <div class="card-meta">
+              <div class="meta-row">
+                <span class="meta-label">Data Streams:</span>
+                <span class="meta-value" id="card-kinesis-count">Loading...</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">Iterator:</span>
+                <span class="meta-value">TRIM_HORIZON</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button onclick="setAwsSubtab('kinesis', true)" class="btn btn-primary">Explore Kinesis &darr;</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Multi-Service AWS Console -->
+      <div class="aws-console" id="aws-console-section">
+        <div class="subnav-tabs">
+          <button class="subnav-btn active" id="subtab-btn-s3" onclick="setAwsSubtab('s3', false)">
+            <span>🪣</span> S3 Bucket Explorer
+          </button>
+          <button class="subnav-btn" id="subtab-btn-sqs" onclick="setAwsSubtab('sqs', false)">
+            <span>📬</span> SQS Queues &amp; Messages
+          </button>
+          <button class="subnav-btn" id="subtab-btn-dynamodb" onclick="setAwsSubtab('dynamodb', false)">
+            <span>🗄️</span> DynamoDB Tables
+          </button>
+          <button class="subnav-btn" id="subtab-btn-secrets" onclick="setAwsSubtab('secrets', false)">
+            <span>🔐</span> Secrets Manager
+          </button>
+          <button class="subnav-btn" id="subtab-btn-lambda" onclick="setAwsSubtab('lambda', false)">
+            <span>⚡</span> AWS Lambda
+          </button>
+          <button class="subnav-btn" id="subtab-btn-events" onclick="setAwsSubtab('events', false)">
+            <span>🎯</span> EventBridge
+          </button>
+          <button class="subnav-btn" id="subtab-btn-kinesis" onclick="setAwsSubtab('kinesis', false)">
+            <span>🌊</span> Kinesis Streams
+          </button>
+        </div>
+
+        <!-- 1. SUBTAB: S3 BUCKET EXPLORER -->
+        <div id="subtab-panel-s3" class="subtab-panel active">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span>🪣</span> LocalStack S3 Bucket:
+              <span class="mono-cell" style="font-size: 15px;">fastapi-bucket</span>
+            </div>
+            <div class="panel-toolbar">
+              <a href="http://localhost:8085" target="_blank" class="ctrl-btn ctrl-btn-primary">
+                <span>🖥️</span> Open S3 Browser (8085) &rarr;
+              </a>
+              <input type="file" id="s3-real-file-input" style="display: none;" onchange="handleRealFileUpload(event)" />
+              <button class="ctrl-btn ctrl-btn-primary" onclick="document.getElementById('s3-real-file-input').click()">
+                <span>📤</span> Upload File
+              </button>
+              <button class="ctrl-btn" onclick="uploadSampleFile()">
+                <span>➕</span> Upload Sample Document
+              </button>
+              <button class="ctrl-btn" onclick="fetchS3Objects()">
+                <span>🔄</span> Refresh
+              </button>
+            </div>
+          </div>
+
+          <div class="data-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>File Name (Key)</th>
+                  <th>Size</th>
+                  <th>Last Modified</th>
+                  <th style="text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="s3-files-tbody">
+                <tr>
+                  <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">Loading objects from LocalStack S3...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 2. SUBTAB: SQS QUEUES -->
+        <div id="subtab-panel-sqs" class="subtab-panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span>📬</span> SQS Message Queues
+            </div>
+            <div class="panel-toolbar">
+              <button class="ctrl-btn" onclick="fetchSQSQueues()">
+                <span>🔄</span> Refresh Queues
+              </button>
+              <button class="ctrl-btn ctrl-btn-primary" onclick="openCreateQueueModal()">
+                <span>➕</span> Create New Queue
+              </button>
+            </div>
+          </div>
+
+          <div class="data-table-wrap" style="margin-bottom: 24px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Queue Name</th>
+                  <th>Messages Visible</th>
+                  <th>In-Flight</th>
+                  <th style="text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="sqs-queues-tbody">
+                <tr>
+                  <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">Loading SQS queues...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- SQS Message Sender -->
+          <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px;">
+            <div class="panel-title" style="margin-bottom: 12px; font-size: 15px;">
+              <span>✉️</span> Send Test Message to Queue
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 2fr auto; gap: 12px; align-items: flex-end;">
+              <div>
+                <label class="form-label">Target Queue</label>
+                <select id="sqs-send-queue-select" class="form-input"></select>
+              </div>
+              <div>
+                <label class="form-label">Message Payload (JSON or Text)</label>
+                <input id="sqs-send-body" type="text" class="form-input" value='{"order_id": 999, "action": "process_payment"}' />
+              </div>
+              <button class="ctrl-btn ctrl-btn-primary" style="height: 42px;" onclick="sendSQSTestMessage()">
+                <span>🚀</span> Send Message
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. SUBTAB: DYNAMODB -->
+        <div id="subtab-panel-dynamodb" class="subtab-panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span>🗄️</span> DynamoDB Tables &amp; Items
+            </div>
+            <div class="panel-toolbar">
+              <button class="ctrl-btn ctrl-btn-primary" onclick="openCreateDynamoTableModal()">
+                <span>➕</span> Create Custom Table
+              </button>
+              <button class="ctrl-btn" onclick="createSampleDynamoTable()">
+                <span>⚡</span> Sample "products" Table
+              </button>
+              <button class="ctrl-btn" onclick="fetchDynamoTables()">
+                <span>🔄</span> Refresh Tables
+              </button>
+            </div>
+          </div>
+
+          <div class="data-table-wrap" style="margin-bottom: 24px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Table Name</th>
+                  <th>Status</th>
+                  <th>Partition Key</th>
+                  <th>Item Count</th>
+                  <th style="text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="dynamo-tables-tbody">
+                <tr>
+                  <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">Loading DynamoDB tables...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Scanned Items View -->
+          <div id="dynamo-items-container" style="background: rgba(0,0,0,0.2); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px; display: none;">
+            <div class="panel-header" style="margin-bottom: 14px;">
+              <div class="panel-title" style="font-size: 15px;">
+                <span>📄</span> Records in <span id="dynamo-selected-table" class="mono-cell" style="font-size: 15px;"></span>
+              </div>
+              <div class="panel-toolbar">
+                <button class="ctrl-btn ctrl-btn-primary" onclick="openInsertDynamoItemModal()">
+                  <span>➕</span> Insert Custom JSON Item
+                </button>
+                <button class="ctrl-btn" onclick="insertSampleDynamoItem()">
+                  <span>⚡</span> Insert Sample Record
+                </button>
+                <button class="ctrl-btn" onclick="scanDynamoTable(activeDynamoTable, activeDynamoPartitionKey)">
+                  <span>🔄</span> Refresh Records
+                </button>
+              </div>
+            </div>
+
+            <!-- Items Table -->
+            <div class="data-table-wrap" style="margin-bottom: 16px;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Key Value</th>
+                    <th>Document Attributes</th>
+                    <th style="text-align: right;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="dynamo-records-tbody">
+                  <tr>
+                    <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 18px;">No records found. Click "Insert Custom JSON Item"!</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Collapsible Raw JSON -->
+            <details style="margin-top: 10px;">
+              <summary style="font-size: 12.5px; color: var(--text-muted); cursor: pointer; font-weight: 600;">View Raw JSON Payload</summary>
+              <pre id="dynamo-items-json" style="margin-top: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; background: rgba(0,0,0,0.5); padding: 12px; border-radius: 8px; color: #38bdf8; max-height: 220px; overflow-y: auto;"></pre>
+            </details>
+          </div>
+        </div>
+
+        <!-- 4. SUBTAB: SECRETS MANAGER -->
+        <div id="subtab-panel-secrets" class="subtab-panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span>🔐</span> Secrets Manager Credentials
+            </div>
+            <div class="panel-toolbar">
+              <button class="ctrl-btn" onclick="fetchSecrets()">
+                <span>🔄</span> Refresh
+              </button>
+              <button class="ctrl-btn ctrl-btn-primary" onclick="openCreateSecretModal()">
+                <span>➕</span> Store New Secret
+              </button>
+            </div>
+          </div>
+
+          <div class="data-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Secret Name</th>
+                  <th>ARN</th>
+                  <th style="text-align: right;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="secrets-tbody">
+                <tr>
+                  <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 20px;">Loading secrets...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 5. SUBTAB: AWS LAMBDA -->
+        <div id="subtab-panel-lambda" class="subtab-panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span>⚡</span> AWS Lambda Serverless Functions
+            </div>
+            <div class="panel-toolbar">
+              <button class="ctrl-btn ctrl-btn-primary" onclick="openCreateLambdaModal()">
+                <span>➕</span> Deploy Custom Lambda
+              </button>
+              <button class="ctrl-btn" onclick="deploySampleLambda()">
+                <span>⚡</span> Deploy Sample Function
+              </button>
+              <button class="ctrl-btn" onclick="fetchLambdaFunctions()">
+                <span>🔄</span> Refresh
+              </button>
+            </div>
+          </div>
+
+          <div class="data-table-wrap" style="margin-bottom: 24px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Function Name</th>
+                  <th>Runtime</th>
+                  <th>Handler</th>
+                  <th>Code Size</th>
+                  <th>Last Modified</th>
+                  <th style="text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="lambda-functions-tbody">
+                <tr>
+                  <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">Loading Lambda functions...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 6. SUBTAB: EVENTBRIDGE -->
+        <div id="subtab-panel-events" class="subtab-panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span>🎯</span> Amazon EventBridge Event Buses
+            </div>
+            <div class="panel-toolbar">
+              <button class="ctrl-btn ctrl-btn-primary" onclick="openPutEventModal()">
+                <span>📨</span> Publish Test Event
+              </button>
+              <button class="ctrl-btn" onclick="fetchEventBuses()">
+                <span>🔄</span> Refresh Buses
+              </button>
+            </div>
+          </div>
+
+          <div class="data-table-wrap" style="margin-bottom: 24px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Event Bus Name</th>
+                  <th>Bus ARN</th>
+                  <th style="text-align: right;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="event-buses-tbody">
+                <tr>
+                  <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 20px;">Loading Event Buses...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Rules Table -->
+          <div class="panel-title" style="font-size: 15px; margin-bottom: 12px;">
+            <span>📋</span> Rules on Default Bus
+          </div>
+          <div class="data-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Rule Name</th>
+                  <th>State</th>
+                  <th>Event Pattern</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
+              <tbody id="event-rules-tbody">
+                <tr>
+                  <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 18px;">Loading rules...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 7. SUBTAB: KINESIS -->
+        <div id="subtab-panel-kinesis" class="subtab-panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span>🌊</span> Amazon Kinesis Data Streams
+            </div>
+            <div class="panel-toolbar">
+              <button class="ctrl-btn ctrl-btn-primary" onclick="openCreateKinesisModal()">
+                <span>➕</span> Create Stream
+              </button>
+              <button class="ctrl-btn" onclick="createSampleKinesisStream()">
+                <span>⚡</span> Sample Stream
+              </button>
+              <button class="ctrl-btn" onclick="fetchKinesisStreams()">
+                <span>🔄</span> Refresh
+              </button>
+            </div>
+          </div>
+
+          <div class="data-table-wrap" style="margin-bottom: 24px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Stream Name</th>
+                  <th>Status</th>
+                  <th>Open Shards</th>
+                  <th style="text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="kinesis-streams-tbody">
+                <tr>
+                  <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">Loading Kinesis streams...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Records Viewer -->
+          <div id="kinesis-records-container" style="background: rgba(0,0,0,0.2); border: 1px solid var(--card-border); border-radius: 12px; padding: 20px; display: none;">
+            <div class="panel-header" style="margin-bottom: 14px;">
+              <div class="panel-title" style="font-size: 15px;">
+                <span>📖</span> Records in Stream: <span id="kinesis-selected-stream" class="mono-cell" style="font-size: 15px;"></span>
+              </div>
+              <div class="panel-toolbar">
+                <button class="ctrl-btn ctrl-btn-primary" onclick="openPutKinesisRecordModal(activeKinesisStream)">
+                  <span>➕</span> Put Record
+                </button>
+                <button class="ctrl-btn" onclick="readKinesisRecords(activeKinesisStream)">
+                  <span>🔄</span> Refresh Records
+                </button>
+              </div>
+            </div>
+
+            <div class="data-table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Seq Number</th>
+                    <th>Partition Key</th>
+                    <th>Arrival Timestamp</th>
+                    <th>Payload Data</th>
+                  </tr>
+                </thead>
+                <tbody id="kinesis-records-tbody">
+                  <tr>
+                    <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 18px;">No records yet. Click "Put Record"!</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>

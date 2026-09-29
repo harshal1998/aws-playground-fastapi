@@ -1,0 +1,1 @@
+"""FastAPI Dockerized Application Package."""

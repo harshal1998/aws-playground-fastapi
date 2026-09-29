@@ -1,0 +1,213 @@
+  <!-- Modal: Create SQS Queue -->
+  <div id="modal-queue" class="modal-overlay">
+    <div class="modal-box">
+      <h3 class="modal-title">Create New SQS Queue</h3>
+      <div class="form-group">
+        <label class="form-label">Queue Name</label>
+        <input type="text" id="new-queue-name" class="form-input" placeholder="e.g. notifications-queue" />
+      </div>
+      <div class="modal-actions">
+        <button class="ctrl-btn" onclick="closeModal('modal-queue')">Cancel</button>
+        <button class="ctrl-btn ctrl-btn-primary" onclick="submitCreateQueue()">Create Queue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Create Secret -->
+  <div id="modal-secret" class="modal-overlay">
+    <div class="modal-box">
+      <h3 class="modal-title">Store Mock AWS Secret</h3>
+      <div class="form-group">
+        <label class="form-label">Secret Name</label>
+        <input type="text" id="new-secret-name" class="form-input" placeholder="e.g. app/api_token" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Secret Value (JSON or String)</label>
+        <textarea id="new-secret-val" class="form-textarea" rows="4" placeholder="Enter sensitive value here..."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="ctrl-btn" onclick="closeModal('modal-secret')">Cancel</button>
+        <button class="ctrl-btn ctrl-btn-primary" onclick="submitCreateSecret()">Save Secret</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: View Secret -->
+  <div id="modal-view-secret" class="modal-overlay">
+    <div class="modal-box">
+      <h3 class="modal-title" id="view-secret-title">Secret Value</h3>
+      <pre id="view-secret-body" style="font-family: 'JetBrains Mono', monospace; font-size: 13px; background: rgba(0,0,0,0.5); padding: 14px; border-radius: 8px; color: #34d399; max-height: 240px; overflow-y: auto; word-break: break-all;"></pre>
+      <div class="modal-actions">
+        <button class="ctrl-btn" onclick="closeModal('modal-view-secret')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Create Custom DynamoDB Table -->
+  <div id="modal-dynamo-table" class="modal-overlay">
+    <div class="modal-box">
+      <h3 class="modal-title">Create DynamoDB Table</h3>
+      <div class="form-group">
+        <label class="form-label">Table Name</label>
+        <input type="text" id="new-dynamo-table-name" class="form-input" placeholder="e.g. customers or orders" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Partition Key Name (HASH)</label>
+        <input type="text" id="new-dynamo-key-name" class="form-input" value="id" placeholder="e.g. id or user_id" />
+      </div>
+      <div class="modal-actions">
+        <button class="ctrl-btn" onclick="closeModal('modal-dynamo-table')">Cancel</button>
+        <button class="ctrl-btn ctrl-btn-primary" onclick="submitCreateDynamoTable()">Create Table</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Insert Custom DynamoDB JSON Record -->
+  <div id="modal-dynamo-item" class="modal-overlay">
+    <div class="modal-box" style="max-width: 600px;">
+      <h3 class="modal-title">Insert Item into <span id="modal-item-table-name"></span></h3>
+      <div class="form-group">
+        <label class="form-label">JSON Document (Must include partition key: <span id="modal-item-key-label" class="mono-cell"></span>)</label>
+        <textarea id="new-dynamo-item-json" class="form-textarea" rows="8" placeholder='{\n  "id": "item_101",\n  "title": "My Custom Item",\n  "price": 49.99,\n  "active": true\n}'></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="ctrl-btn" onclick="closeModal('modal-dynamo-item')">Cancel</button>
+        <button class="ctrl-btn ctrl-btn-primary" onclick="submitInsertDynamoItem()">Insert Item</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Edit DynamoDB JSON Record -->
+  <div id="modal-edit-dynamo-item" class="modal-overlay">
+    <div class="modal-box" style="max-width: 600px;">
+      <h3 class="modal-title">✏️ Edit Item in <span id="modal-edit-table-name" class="mono-cell" style="color: var(--accent-cyan);"></span></h3>
+      <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px;">
+        Partition Key (<span id="modal-edit-key-name" class="mono-cell" style="font-weight: 600;"></span>): <b id="modal-edit-key-value" class="mono-cell" style="color: #38bdf8;"></b>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Document Attributes (JSON):</label>
+        <textarea id="edit-dynamo-item-json" class="form-textarea" rows="10" style="font-family: 'JetBrains Mono', monospace; font-size: 12.5px;"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="ctrl-btn" onclick="closeModal('modal-edit-dynamo-item')">Cancel</button>
+        <button class="ctrl-btn ctrl-btn-primary" onclick="submitEditDynamoItem()">💾 Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Create Lambda Function -->
+  <div id="modal-create-lambda" class="modal-overlay">
+    <div class="modal-box" style="max-width: 600px;">
+      <h3 class="modal-title">⚡ Deploy Python Lambda Function</h3>
+      <div class="form-group">
+        <label class="form-label">Function Name</label>
+        <input type="text" id="new-lambda-name" class="form-input" placeholder="e.g. process_order" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Handler Code (Python 3.11)</label>
+        <textarea id="new-lambda-code" class="form-textarea" rows="8" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="ctrl-btn" onclick="closeModal('modal-create-lambda')">Cancel</button>
+        <button class="ctrl-btn ctrl-btn-primary" onclick="submitCreateLambda()">Deploy Function</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Invoke Lambda Function -->
+  <div id="modal-invoke-lambda" class="modal-overlay">
+    <div class="modal-box" style="max-width: 620px;">
+      <h3 class="modal-title">⚡ Invoke Lambda: <span id="modal-invoke-fn-name" class="mono-cell" style="color: var(--accent-amber);"></span></h3>
+      <div class="form-group">
+        <label class="form-label">Invocation Payload (JSON)</label>
+        <textarea id="invoke-lambda-payload" class="form-textarea" rows="5" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">{\n  "action": "test_run",\n  "user_id": 42\n}</textarea>
+      </div>
+      <div id="invoke-result-box" style="display: none; margin-bottom: 14px;">
+        <label class="form-label">Execution Result:</label>
+        <pre id="invoke-result-output" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; background: rgba(0,0,0,0.5); padding: 12px; border-radius: 8px; color: #34d399; max-height: 180px; overflow-y: auto;"></pre>
+      </div>
+      <div class="modal-actions">
+        <button class="ctrl-btn" onclick="closeModal('modal-invoke-lambda')">Close</button>
+        <button class="ctrl-btn ctrl-btn-primary" id="btn-invoke-submit" onclick="submitInvokeLambda()">🚀 Execute Function</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Publish EventBridge Event -->
+  <div id="modal-put-event" class="modal-overlay">
+    <div class="modal-box" style="max-width: 580px;">
+      <h3 class="modal-title">🎯 Publish EventBridge Event</h3>
+      <div class="form-group">
+        <label class="form-label">Event Source</label>
+        <input type="text" id="event-source" class="form-input" value="custom.fastapi.app" placeholder="e.g. order.service" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Detail Type</label>
+        <input type="text" id="event-detail-type" class="form-input" value="OrderPlaced" placeholder="e.g. OrderPlaced or UserRegistered" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Event Detail (JSON)</label>
+        <textarea id="event-detail-json" class="form-textarea" rows="5" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">{\n  "order_id": 1001,\n  "amount": 199.50,\n  "status": "confirmed"\n}</textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="ctrl-btn" onclick="closeModal('modal-put-event')">Cancel</button>
+        <button class="ctrl-btn ctrl-btn-primary" onclick="submitPutEvent()">Publish Event</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Create Kinesis Stream -->
+  <div id="modal-create-kinesis" class="modal-overlay">
+    <div class="modal-box">
+      <h3 class="modal-title">🌊 Create Kinesis Data Stream</h3>
+      <div class="form-group">
+        <label class="form-label">Stream Name</label>
+        <input type="text" id="new-kinesis-name" class="form-input" placeholder="e.g. telemetry-events" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Shard Count</label>
+        <input type="number" id="new-kinesis-shards" class="form-input" value="1" min="1" max="10" />
+      </div>
+      <div class="modal-actions">
+        <button class="ctrl-btn" onclick="closeModal('modal-create-kinesis')">Cancel</button>
+        <button class="ctrl-btn ctrl-btn-primary" onclick="submitCreateKinesisStream()">Create Stream</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Put Kinesis Record -->
+  <div id="modal-kinesis-put" class="modal-overlay">
+    <div class="modal-box" style="max-width: 580px;">
+      <h3 class="modal-title">🌊 Put Record into <span id="modal-kinesis-put-stream" class="mono-cell" style="color: var(--accent-cyan);"></span></h3>
+      <div class="form-group">
+        <label class="form-label">Partition Key</label>
+        <input type="text" id="kinesis-put-partkey" class="form-input" value="device_sensor_01" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data Payload (JSON or String)</label>
+        <textarea id="kinesis-put-data" class="form-textarea" rows="5" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">{\n  "temp": 72.4,\n  "humidity": 45,\n  "timestamp": 1720000000\n}</textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="ctrl-btn" onclick="closeModal('modal-kinesis-put')">Cancel</button>
+        <button class="ctrl-btn ctrl-btn-primary" onclick="submitPutKinesisRecord()">Put Record</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: LocalStack Health JSON -->
+  <div id="modal-health" class="modal-overlay">
+    <div class="modal-box" style="max-width: 640px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <h3 class="modal-title" style="margin-bottom: 0;">LocalStack Health JSON</h3>
+        <a href="http://localhost:4566/_localstack/health" target="_blank" rel="noreferrer" class="ctrl-btn" style="font-size: 11px;">
+          Open in New Tab &rarr;
+        </a>
+      </div>
+      <pre id="health-json-body" style="font-family: 'JetBrains Mono', monospace; font-size: 12.5px; background: rgba(0,0,0,0.5); padding: 14px; border-radius: 8px; color: #38bdf8; max-height: 340px; overflow-y: auto;"></pre>
+      <div class="modal-actions">
+        <button class="ctrl-btn" onclick="copyText(document.getElementById('health-json-body').innerText)">Copy JSON</button>
+        <button class="ctrl-btn ctrl-btn-primary" onclick="closeModal('modal-health')">Close</button>
+      </div>
+    </div>
+  </div>
+

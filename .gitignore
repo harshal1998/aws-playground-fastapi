@@ -1,0 +1,18 @@
+# Environment variables
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+venv/
+.venv/
+env/
+
+# Locust
+.locust/
+
+# Docker
+*.log

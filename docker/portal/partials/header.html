@@ -1,0 +1,31 @@
+    <header>
+      <div class="brand-wrap">
+        <img src="/thumbnail.jpg" alt="Developer Platform" class="brand-thumb" />
+        <div>
+          <h1 class="brand-title">
+            FastAPI Dockerized Platform
+            <span class="brand-badge">PROD STACK</span>
+          </h1>
+          <p class="subtitle">Unified Microservices, Mock Cloud &amp; Observability Control Plane</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="status-pill">
+          <span class="pulse-dot"></span>
+          <span>All Containers Active</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Top-Level Tab Switcher -->
+    <nav class="portal-tabs">
+      <button class="tab-btn active" id="tab-btn-platform" onclick="setPortalTab('platform')">
+        <span>🚀</span> Core Platform Services
+        <span class="tab-badge">7</span>
+      </button>
+      <button class="tab-btn" id="tab-btn-aws" onclick="setPortalTab('aws')">
+        <span>☁️</span> AWS Services (LocalStack)
+        <span class="tab-badge tab-badge-aws" id="aws-service-count-badge">Active</span>
+      </button>
+    </nav>
+

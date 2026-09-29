@@ -1,0 +1,214 @@
+    <!-- ========================================================================= -->
+    <!-- TAB 1: CORE PLATFORM SERVICES                                             -->
+    <!-- ========================================================================= -->
+    <div id="view-platform" class="tab-content active">
+      <div class="grid">
+        <!-- 1. FastAPI Swagger Docs -->
+        <div class="card" style="--card-accent: #38bdf8;">
+          <div>
+            <div class="card-header">
+              <div class="card-icon" style="color: #38bdf8;">⚡</div>
+              <span class="card-tag">Backend API</span>
+            </div>
+            <h2 class="card-title">FastAPI Swagger UI</h2>
+            <p class="card-desc">Interactive OpenAPI documentation for testing all CRUD routes, cache performance, and background tasks.</p>
+            <div class="card-meta">
+              <div class="meta-row">
+                <span class="meta-label">Port:</span>
+                <span class="meta-value">8000</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">Proxy:</span>
+                <span class="meta-value">/docs</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <a href="http://localhost:8000/docs" target="_blank" class="btn btn-primary">Open Swagger &rarr;</a>
+            <a href="http://localhost:8000/redoc" target="_blank" class="btn btn-secondary">ReDoc</a>
+          </div>
+        </div>
+
+        <!-- 2. pgAdmin 4 -->
+        <div class="card" style="--card-accent: #818cf8;">
+          <div>
+            <div class="card-header">
+              <div class="card-icon" style="color: #818cf8;">🐘</div>
+              <span class="card-tag">Database GUI</span>
+            </div>
+            <h2 class="card-title">pgAdmin 4</h2>
+            <p class="card-desc">Visual manager for PostgreSQL. Pre-configured with the `appdb` database connection.</p>
+            <div class="card-meta">
+              <div class="meta-row">
+                <span class="meta-label">Port:</span>
+                <span class="meta-value">5050</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">Credentials:</span>
+                <span class="meta-value">
+                  admin@admin.com / admin
+                  <button class="copy-btn" onclick="copyText('admin@admin.com')">Copy</button>
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <a href="http://localhost:5050" target="_blank" class="btn btn-primary">Open pgAdmin &rarr;</a>
+          </div>
+        </div>
+
+        <!-- 3. Redis Commander -->
+        <div class="card" style="--card-accent: #ef4444;">
+          <div>
+            <div class="card-header">
+              <div class="card-icon" style="color: #ef4444;">🧠</div>
+              <span class="card-tag">Cache Manager</span>
+            </div>
+            <h2 class="card-title">Redis Commander</h2>
+            <p class="card-desc">Web dashboard for Redis. Inspect active cache keys, TTL timers, and cache invalidation in real time.</p>
+            <div class="card-meta">
+              <div class="meta-row">
+                <span class="meta-label">Port:</span>
+                <span class="meta-value">8081</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">Host:</span>
+                <span class="meta-value">redis:6379</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <a href="http://localhost:8081" target="_blank" class="btn btn-primary">Open Redis Commander &rarr;</a>
+          </div>
+        </div>
+
+        <!-- 4. Mailpit -->
+        <div class="card" style="--card-accent: #f59e0b;">
+          <div>
+            <div class="card-header">
+              <div class="card-icon" style="color: #f59e0b;">✉️</div>
+              <span class="card-tag">Email Sandbox</span>
+            </div>
+            <h2 class="card-title">Mailpit Email Inbox</h2>
+            <p class="card-desc">Mock SMTP server and web inbox. Catches all order and notification emails sent by background tasks.</p>
+            <div class="card-meta">
+              <div class="meta-row">
+                <span class="meta-label">UI Port:</span>
+                <span class="meta-value">8025</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">SMTP Port:</span>
+                <span class="meta-value">1025</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <a href="http://localhost:8025" target="_blank" class="btn btn-primary">Open Mailpit Inbox &rarr;</a>
+          </div>
+        </div>
+
+        <!-- 5. Grafana -->
+        <div class="card" style="--card-accent: #fb923c;">
+          <div>
+            <div class="card-header">
+              <div class="card-icon" style="color: #fb923c;">📈</div>
+              <span class="card-tag">Observability</span>
+            </div>
+            <h2 class="card-title">Grafana Dashboards</h2>
+            <p class="card-desc">Real-time visualization of API latency percentiles, requests/sec, and container health metrics.</p>
+            <div class="card-meta">
+              <div class="meta-row">
+                <span class="meta-label">Port:</span>
+                <span class="meta-value">3000</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">Credentials:</span>
+                <span class="meta-value">
+                  admin / admin
+                  <button class="copy-btn" onclick="copyText('admin')">Copy</button>
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <a href="http://localhost:3000" target="_blank" class="btn btn-primary">Open Grafana &rarr;</a>
+          </div>
+        </div>
+
+        <!-- 6. Prometheus -->
+        <div class="card" style="--card-accent: #f43f5e;">
+          <div>
+            <div class="card-header">
+              <div class="card-icon" style="color: #f43f5e;">🔥</div>
+              <span class="card-tag">Metrics Engine</span>
+            </div>
+            <h2 class="card-title">Prometheus</h2>
+            <p class="card-desc">Time-series metrics engine. Scrapes `/metrics` from the FastAPI application every 5 seconds.</p>
+            <div class="card-meta">
+              <div class="meta-row">
+                <span class="meta-label">Port:</span>
+                <span class="meta-value">9090</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">Target:</span>
+                <span class="meta-value">api:8000/metrics</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <a href="http://localhost:9090" target="_blank" class="btn btn-primary">Open Prometheus &rarr;</a>
+          </div>
+        </div>
+
+        <!-- 7. Locust -->
+        <div class="card" style="--card-accent: #a855f7;">
+          <div>
+            <div class="card-header">
+              <div class="card-icon" style="color: #a855f7;">🦗</div>
+              <span class="card-tag">Load Testing</span>
+            </div>
+            <h2 class="card-title">Locust Swarm</h2>
+            <p class="card-desc">Distributed load and performance tester. Benchmark concurrent DB reads, writes, and cache hits.</p>
+            <div class="card-meta">
+              <div class="meta-row">
+                <span class="meta-label">Port:</span>
+                <span class="meta-value">8089</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">Target:</span>
+                <span class="meta-value">http://api:8000</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-actions">
+            <a href="http://localhost:8089" target="_blank" class="btn btn-primary">Open Locust &rarr;</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick PowerShell CLI Cheatsheet -->
+      <div class="cli-box">
+        <div class="cli-title">
+          <span>⚡</span> Quick Management CLI (PowerShell)
+        </div>
+        <div class="cmd-grid">
+          <div class="cmd-item">
+            <span class="cmd-code">.\dev.ps1 urls</span>
+            <button class="copy-btn" onclick="copyText('.\\dev.ps1 urls')">Copy</button>
+          </div>
+          <div class="cmd-item">
+            <span class="cmd-code">.\dev.ps1 test</span>
+            <button class="copy-btn" onclick="copyText('.\\dev.ps1 test')">Copy</button>
+          </div>
+          <div class="cmd-item">
+            <span class="cmd-code">.\dev.ps1 migrate</span>
+            <button class="copy-btn" onclick="copyText('.\\dev.ps1 migrate')">Copy</button>
+          </div>
+          <div class="cmd-item">
+            <span class="cmd-code">.\dev.ps1 run</span>
+            <button class="copy-btn" onclick="copyText('.\\dev.ps1 run')">Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+

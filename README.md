@@ -307,7 +307,7 @@ Two workflows in `.github/workflows/` automate quality checks and image publishi
 
 - **`ci.yml`** — runs on every PR into `develop` (and on push to `develop`):
   - `lint`: `ruff check .` (config in `pyproject.toml`)
-  - `integration-test`: builds the API image, brings up `db`/`redis`/`localstack`/`mailpit`/`api` via Docker Compose, runs Alembic migrations, then the `app/tests/` pytest suite against the live stack
+  - `integration-test`: builds the API image, brings up `db`/`redis`/`localstack`/`mailpit`/`api` via Docker Compose (the `api` container applies Alembic migrations itself on startup, gated by its healthcheck), then runs the `app/tests/` pytest suite against the live stack
 - **`cd.yml`** — runs after `ci.yml` succeeds on `develop`: builds the `docker/Dockerfile` image and pushes it to GitHub Container Registry as `ghcr.io/<owner>/<repo>:latest` and `:<commit-sha>`
 
 `develop` is a protected branch (PRs required, no force-push/deletion), so both workflows exist to give an incoming PR a pass/fail signal before merge.

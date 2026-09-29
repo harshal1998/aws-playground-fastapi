@@ -30,9 +30,6 @@ jobs:
       - name: Start backing services and API
         run: docker compose up -d --build --wait db redis localstack mailpit api
 
-      - name: Run database migrations
-        run: docker compose run --rm migration
-
       - name: Run integration test suite
         run: docker compose run --rm test
 

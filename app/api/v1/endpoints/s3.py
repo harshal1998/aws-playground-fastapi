@@ -23,8 +23,8 @@ def get_s3_file(key: str, s3_service: S3ServiceDep):
             media_type=content_type,
             headers={"Content-Disposition": f'inline; filename="{key}"'},
         )
-    except ClientError:
-        raise HTTPException(status_code=404, detail="File not found in S3 bucket")
+    except ClientError as e:
+        raise HTTPException(status_code=404, detail="File not found in S3 bucket") from e
 
 
 @router.delete("/file")
@@ -34,7 +34,7 @@ def delete_s3_file(key: str, s3_service: S3ServiceDep):
         s3_service.delete_object(key)
         return {"status": "deleted", "key": key}
     except ClientError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/upload")

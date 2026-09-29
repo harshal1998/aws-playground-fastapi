@@ -210,6 +210,28 @@ class AWSService:
         self.dynamodb.delete_table(TableName=table_name)
         return {"status": "deleted", "table": table_name}
 
+    @staticmethod
+    def _unwrap_dynamodb_value(v: dict[str, Any]) -> Any:
+        """Recursively unwraps a single DynamoDB attribute-value dict into a plain Python value."""
+        if "S" in v:
+            return v["S"]
+        elif "N" in v:
+            return float(v["N"]) if "." in v["N"] else int(v["N"])
+        elif "BOOL" in v:
+            return v["BOOL"]
+        elif "NULL" in v:
+            return None
+        elif "L" in v:
+            return [AWSService._unwrap_dynamodb_value(item) for item in v["L"]]
+        elif "M" in v:
+            return {mk: AWSService._unwrap_dynamodb_value(mv) for mk, mv in v["M"].items()}
+        elif "SS" in v:
+            return list(v["SS"])
+        elif "NS" in v:
+            return [float(n) if "." in n else int(n) for n in v["NS"]]
+        else:
+            return str(v)
+
     def scan_dynamodb_items(self, table_name: str, limit: int = 50) -> list[dict[str, Any]]:
         """Scans and returns items from a DynamoDB table formatted as JSON."""
         try:
@@ -217,16 +239,7 @@ class AWSService:
             items = resp.get("Items", [])
             clean_items = []
             for it in items:
-                row = {}
-                for k, v in it.items():
-                    if "S" in v:
-                        row[k] = v["S"]
-                    elif "N" in v:
-                        row[k] = float(v["N"]) if "." in v["N"] else int(v["N"])
-                    elif "BOOL" in v:
-                        row[k] = v["BOOL"]
-                    else:
-                        row[k] = str(v)
+                row = {k: self._unwrap_dynamodb_value(v) for k, v in it.items()}
                 clean_items.append(row)
             return clean_items
         except Exception as e:

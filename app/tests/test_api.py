@@ -41,6 +41,14 @@ def test_create_and_read_item():
     assert single_item["name"] == payload["name"]
 
 
+def test_create_item_rejects_non_positive_price():
+    """Verify creating an item with a zero or negative price returns 422."""
+    for bad_price in (0, -10.5):
+        payload = {"name": "Invalid Price Item", "price": bad_price, "is_offer": False}
+        response = requests.post(f"{API_URL}/items", json=payload)
+        assert response.status_code == 422
+
+
 def test_get_items_list():
     """Verify the items listing endpoint returns a valid list."""
     response = requests.get(f"{API_URL}/items?limit=5")

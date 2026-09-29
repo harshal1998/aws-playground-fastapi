@@ -20,7 +20,8 @@ router = APIRouter()
 @router.get("/health-raw")
 def get_aws_health_raw(aws_service: AWSServiceDep):
     """Proxies the raw LocalStack health JSON — avoids CORS when called from the browser."""
-    import urllib.request, json
+    import json
+    import urllib.request
     health_url = f"{aws_service.endpoint_url}/_localstack/health"
     try:
         req = urllib.request.Request(health_url, headers={"User-Agent": "FastAPI-HealthProxy"})

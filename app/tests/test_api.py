@@ -1,4 +1,5 @@
 import os
+import time
 
 import requests
 
@@ -226,10 +227,16 @@ def test_aws_lambda_lifecycle():
     fns = list_res.json().get("functions", [])
     assert any(f["name"] == fn_name for f in fns)
 
-    invoke_res = requests.post(
-        f"{API_URL}/aws/lambda/invoke",
-        json={"name": fn_name, "payload": {"user": "test_runner"}},
-    )
+    # LocalStack takes a moment to move a freshly created function out of
+    # "Pending" state, so retry briefly instead of failing on a cold invoke.
+    for attempt in range(5):
+        invoke_res = requests.post(
+            f"{API_URL}/aws/lambda/invoke",
+            json={"name": fn_name, "payload": {"user": "test_runner"}},
+        )
+        if invoke_res.status_code == 200 or attempt == 4:
+            break
+        time.sleep(2)
     assert invoke_res.status_code == 200
     data = invoke_res.json()
     assert data["executed"] is True

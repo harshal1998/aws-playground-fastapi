@@ -54,4 +54,5 @@ asyncpg==0.29.0
 redis==5.2.1
 prometheus-client==0.20.0
 alembic==1.14.1
+psycopg[binary]==3.2.4
 boto3==1.36.21

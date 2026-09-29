@@ -2,9 +2,8 @@
 S3 Storage Integration for LocalStack/AWS.
 Provides a class-based S3Service managing buckets and object storage.
 """
-from functools import cached_property
 import socket
-from typing import Any
+from functools import cached_property
 
 import boto3
 from botocore.exceptions import ClientError

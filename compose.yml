@@ -206,7 +206,13 @@ services:
       - MAILPIT_HOST=mailpit
       - MAILPIT_PORT=1025
       - AWS_ENDPOINT_URL=http://localstack:4566
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/', timeout=2)"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     deploy:
       resources:
         limits:
@@ -268,7 +274,8 @@ services:
     environment:
       - API_URL=http://api:8000
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     profiles:
       - test
     deploy:

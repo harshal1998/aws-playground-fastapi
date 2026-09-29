@@ -25,7 +25,7 @@ async def create_item(
     )
 
     if redis_client:
-        keys = await redis_client.keys("items:*")
+        keys = [key async for key in redis_client.scan_iter(match="items:*")]
         if keys:
             await redis_client.delete(*keys)
 

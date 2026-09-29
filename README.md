@@ -21,6 +21,7 @@ A scalable, production-ready local development platform built with **FastAPI**, 
   - [Standalone Benchmark Script](#2-standalone-concurrency-benchmark)
 - [Database Migrations (Alembic)](#-database-migrations-alembic)
 - [Automated Testing (Pytest)](#-automated-testing-pytest)
+- [CI/CD (GitHub Actions)](#-cicd-github-actions)
 - [Developer CLI Helper (PowerShell)](#-developer-cli-helper-powershell)
 
 ---
@@ -296,6 +297,26 @@ docker compose run --rm test
 
 # Or using the PowerShell helper
 .\dev.ps1 test
+```
+
+---
+
+## 🔁 CI/CD (GitHub Actions)
+
+Two workflows in `.github/workflows/` automate quality checks and image publishing:
+
+- **`ci.yml`** — runs on every PR into `develop` (and on push to `develop`):
+  - `lint`: `ruff check .` (config in `pyproject.toml`)
+  - `integration-test`: builds the API image, brings up `db`/`redis`/`localstack`/`mailpit`/`api` via Docker Compose, runs Alembic migrations, then the `app/tests/` pytest suite against the live stack
+- **`cd.yml`** — runs after `ci.yml` succeeds on `develop`: builds the `docker/Dockerfile` image and pushes it to GitHub Container Registry as `ghcr.io/<owner>/<repo>:latest` and `:<commit-sha>`
+
+`develop` is a protected branch (PRs required, no force-push/deletion), so both workflows exist to give an incoming PR a pass/fail signal before merge.
+
+To run the same lint check locally:
+
+```bash
+pip install -r requirements-dev.txt
+ruff check .
 ```
 
 ---

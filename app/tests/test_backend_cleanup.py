@@ -1,6 +1,7 @@
 """
-Regression tests for #35 (backend cleanup): paginated AWS listings and
-Kinesis reads across shards.
+Regression tests for #35 (backend cleanup): paginated AWS listings, Kinesis
+reads across shards, the ASGI metrics middleware, root_path, logging and
+settings validation.
 
 Unit tests drive real boto3 clients through botocore's Stubber, so the
 actual request parameters (MaxResults, NextToken, ContinuationToken, ...)
@@ -16,11 +17,14 @@ import pathlib
 import time
 import uuid
 
+import pytest
 import requests
 from botocore.stub import ANY, Stubber
 from fastapi import APIRouter, FastAPI
 from prometheus_client import REGISTRY
+from pydantic import ValidationError
 
+from app.core.config import Settings
 from app.core.logging_config import configure_logging
 from app.core.metrics import PrometheusMetricsMiddleware
 from app.services.aws import AWSService
@@ -368,3 +372,51 @@ def test_app_log_lines_show_level_and_logger_name():
     assert "WARNING" in line
     assert "[app.services.s3]" in line
     assert line.endswith("bucket b not ready")
+
+
+# ------------------------------------------------------------------------------
+# Settings (unit)
+# ------------------------------------------------------------------------------
+
+
+def test_settings_reject_a_non_numeric_port(monkeypatch):
+    """Verify a malformed env value fails with a validation error naming the variable."""
+    monkeypatch.setenv("API_PORT", "abc")
+    with pytest.raises(ValidationError) as excinfo:
+        Settings(_env_file=None)
+    assert "API_PORT" in str(excinfo.value)
+
+
+def test_settings_reject_out_of_range_values(monkeypatch):
+    """Verify bounds are checked (e.g. a zero timeout or an invalid log level)."""
+    monkeypatch.setenv("AWS_READ_TIMEOUT", "0")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+    monkeypatch.delenv("AWS_READ_TIMEOUT")
+    monkeypatch.setenv("LOG_LEVEL", "chatty")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+    monkeypatch.setenv("LOG_LEVEL", "debug")
+    assert Settings(_env_file=None).LOG_LEVEL == "DEBUG"
+
+
+def test_settings_load_dotenv_with_env_vars_taking_precedence(monkeypatch, tmp_path):
+    """Verify .env values are loaded, real env vars win, and unrelated .env keys are ignored."""
+    env_file = tmp_path / ".env"
+    env_file.write_text("S3_MAX_UPLOAD_BYTES=1234\nS3_BUCKET_NAME=from-dotenv\nGATEWAY_PORT=80\n", encoding="utf-8")
+    monkeypatch.delenv("S3_MAX_UPLOAD_BYTES", raising=False)
+    monkeypatch.setenv("S3_BUCKET_NAME", "from-env")
+    loaded = Settings(_env_file=env_file)
+    assert loaded.S3_MAX_UPLOAD_BYTES == 1234
+    assert loaded.S3_BUCKET_NAME == "from-env"
+
+
+def test_settings_derive_database_url_from_postgres_vars(monkeypatch):
+    """Verify DATABASE_URL still defaults to a DSN built from the POSTGRES_* values."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("POSTGRES_USER", "u35")
+    monkeypatch.setenv("POSTGRES_PASSWORD", "p35")
+    monkeypatch.delenv("POSTGRES_DB", raising=False)
+    assert Settings(_env_file=None).DATABASE_URL == "postgresql://u35:p35@localhost:5432/appdb"
+    monkeypatch.setenv("DATABASE_URL", "postgresql://x:y@db:5432/z")
+    assert Settings(_env_file=None).DATABASE_URL == "postgresql://x:y@db:5432/z"

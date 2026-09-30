@@ -178,7 +178,7 @@ If you want to run the FastAPI app directly on your host machine (outside Docker
    docker compose stop api
 
    # Run with Uvicorn
-   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
    ```
 
 ---

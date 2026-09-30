@@ -33,7 +33,7 @@ switch ($Action.ToLower()) {
         $env:REDIS_URL = "redis://localhost:6379/0"
         $env:MAILPIT_HOST = "localhost"
         $env:AWS_ENDPOINT_URL = "http://localhost:4566"
-        uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+        uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
     }
     default {
         Write-Host "Usage: .\dev.ps1 [urls | run | test | migrate | status]" -ForegroundColor Yellow

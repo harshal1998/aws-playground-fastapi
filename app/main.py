@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.errors import register_exception_handlers
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import close_database_connection, connect_to_database
@@ -18,7 +19,8 @@ async def lifespan(app: FastAPI):
     # 2. Connect to Redis
     app.state.redis = await connect_to_redis()
 
-    # 3. Ensure LocalStack S3 bucket exists
+    # 3. Ensure LocalStack S3 bucket exists (best-effort: if LocalStack is
+    #    down, the first S3 request retries it once LocalStack is back)
     get_s3_service().ensure_bucket_exists()
 
     yield
@@ -33,6 +35,9 @@ app = FastAPI(
     description=settings.PROJECT_DESCRIPTION,
     lifespan=lifespan,
 )
+
+# Map boto3/botocore errors to HTTP statuses (404/400/409/429/502/503)
+register_exception_handlers(app)
 
 # Prometheus Metrics Middleware
 app.add_middleware(PrometheusMetricsMiddleware)

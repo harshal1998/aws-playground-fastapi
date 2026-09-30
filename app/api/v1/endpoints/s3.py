@@ -1,6 +1,5 @@
 from urllib.parse import quote
 
-from botocore.exceptions import ClientError
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from starlette.concurrency import run_in_threadpool
 
@@ -37,30 +36,24 @@ def list_s3_objects(s3_service: S3ServiceDep):
 @router.get("/file")
 def get_s3_file(key: str, s3_service: S3ServiceDep):
     """Downloads the content of an S3 object as a file attachment."""
-    try:
-        content, content_type = s3_service.get_object_content(key)
-        # Never render uploaded content inline: an uploaded HTML/SVG file would
-        # otherwise run scripts on the portal's origin.
-        return Response(
-            content=content,
-            media_type=content_type,
-            headers={
-                "Content-Disposition": _content_disposition(key),
-                "X-Content-Type-Options": "nosniff",
-            },
-        )
-    except ClientError as e:
-        raise HTTPException(status_code=404, detail="File not found in S3 bucket") from e
+    content, content_type = s3_service.get_object_content(key)
+    # Never render uploaded content inline: an uploaded HTML/SVG file would
+    # otherwise run scripts on the portal's origin.
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": _content_disposition(key),
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.delete("/file")
 def delete_s3_file(key: str, s3_service: S3ServiceDep):
     """Deletes an object from the S3 bucket."""
-    try:
-        s3_service.delete_object(key)
-        return {"status": "deleted", "key": key}
-    except ClientError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    s3_service.delete_object(key)
+    return {"status": "deleted", "key": key}
 
 
 @router.post("/upload")

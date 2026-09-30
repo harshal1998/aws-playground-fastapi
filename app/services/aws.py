@@ -114,32 +114,32 @@ class AWSService:
     # 2. SQS Operations
     # --------------------------------------------------------------------------
     def list_sqs_queues(self) -> list[dict[str, Any]]:
-        """Lists all SQS queues with message counts."""
-        try:
-            resp = self.sqs.list_queues()
-            queue_urls = resp.get("QueueUrls", [])
-            result = []
-            for url in queue_urls:
-                name = url.split("/")[-1]
-                try:
-                    attrs = self.sqs.get_queue_attributes(
-                        QueueUrl=url,
-                        AttributeNames=["ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible"],
-                    ).get("Attributes", {})
-                    msg_count = int(attrs.get("ApproximateNumberOfMessages", 0))
-                    in_flight = int(attrs.get("ApproximateNumberOfMessagesNotVisible", 0))
-                except Exception:
-                    msg_count, in_flight = 0, 0
-                result.append({
-                    "name": name,
-                    "url": url,
-                    "messages": msg_count,
-                    "in_flight": in_flight,
-                })
-            return result
-        except Exception as e:
-            print(f"Error listing SQS queues: {e}")
-            return []
+        """Lists all SQS queues with message counts.
+
+        Errors from ListQueues propagate (mapped to an HTTP status by the API
+        exception handlers); a queue deleted mid-listing just reports 0 counts.
+        """
+        resp = self.sqs.list_queues()
+        queue_urls = resp.get("QueueUrls", [])
+        result = []
+        for url in queue_urls:
+            name = url.split("/")[-1]
+            try:
+                attrs = self.sqs.get_queue_attributes(
+                    QueueUrl=url,
+                    AttributeNames=["ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible"],
+                ).get("Attributes", {})
+                msg_count = int(attrs.get("ApproximateNumberOfMessages", 0))
+                in_flight = int(attrs.get("ApproximateNumberOfMessagesNotVisible", 0))
+            except ClientError:
+                msg_count, in_flight = 0, 0
+            result.append({
+                "name": name,
+                "url": url,
+                "messages": msg_count,
+                "in_flight": in_flight,
+            })
+        return result
 
     def create_sqs_queue(self, queue_name: str) -> dict[str, Any]:
         """Creates a new SQS queue."""
@@ -178,29 +178,26 @@ class AWSService:
     # --------------------------------------------------------------------------
     def list_dynamodb_tables(self) -> list[dict[str, Any]]:
         """Lists DynamoDB tables with item counts and partition keys."""
-        try:
-            resp = self.dynamodb.list_tables()
-            table_names = resp.get("TableNames", [])
-            result = []
-            for name in table_names:
-                try:
-                    desc = self.dynamodb.describe_table(TableName=name).get("Table", {})
-                    item_count = desc.get("ItemCount", 0)
-                    status = desc.get("TableStatus", "ACTIVE")
-                    key_schema = desc.get("KeySchema", [])
-                    partition_key = key_schema[0]["AttributeName"] if key_schema else "id"
-                except Exception:
-                    item_count, status, partition_key = 0, "UNKNOWN", "id"
-                result.append({
-                    "name": name,
-                    "item_count": item_count,
-                    "status": status,
-                    "partition_key": partition_key,
-                })
-            return result
-        except Exception as e:
-            print(f"Error listing DynamoDB tables: {e}")
-            return []
+        resp = self.dynamodb.list_tables()
+        table_names = resp.get("TableNames", [])
+        result = []
+        for name in table_names:
+            try:
+                desc = self.dynamodb.describe_table(TableName=name).get("Table", {})
+                item_count = desc.get("ItemCount", 0)
+                status = desc.get("TableStatus", "ACTIVE")
+                key_schema = desc.get("KeySchema", [])
+                partition_key = key_schema[0]["AttributeName"] if key_schema else "id"
+            except ClientError:
+                # e.g. the table was deleted between ListTables and DescribeTable
+                item_count, status, partition_key = 0, "UNKNOWN", "id"
+            result.append({
+                "name": name,
+                "item_count": item_count,
+                "status": status,
+                "partition_key": partition_key,
+            })
+        return result
 
     def create_dynamodb_table(self, table_name: str, key_name: str = "id") -> dict[str, Any]:
         """Creates a simple DynamoDB table with a string partition key."""
@@ -283,20 +280,16 @@ class AWSService:
     # --------------------------------------------------------------------------
     def list_secrets(self) -> list[dict[str, Any]]:
         """Lists all secrets stored in Secrets Manager."""
-        try:
-            resp = self.secretsmanager.list_secrets()
-            secrets_list = resp.get("SecretList", [])
-            return [
-                {
-                    "name": s.get("Name"),
-                    "arn": s.get("ARN"),
-                    "last_changed": s.get("LastChangedDate", "").isoformat() if hasattr(s.get("LastChangedDate"), "isoformat") else str(s.get("LastChangedDate", "")),
-                }
-                for s in secrets_list
-            ]
-        except Exception as e:
-            print(f"Error listing secrets: {e}")
-            return []
+        resp = self.secretsmanager.list_secrets()
+        secrets_list = resp.get("SecretList", [])
+        return [
+            {
+                "name": s.get("Name"),
+                "arn": s.get("ARN"),
+                "last_changed": s.get("LastChangedDate", "").isoformat() if hasattr(s.get("LastChangedDate"), "isoformat") else str(s.get("LastChangedDate", "")),
+            }
+            for s in secrets_list
+        ]
 
     def get_secret(self, secret_name: str) -> dict[str, Any]:
         """Retrieves secret string by name."""
@@ -319,24 +312,20 @@ class AWSService:
     # --------------------------------------------------------------------------
     def list_lambda_functions(self) -> list[dict[str, Any]]:
         """Lists all deployed Lambda functions."""
-        try:
-            resp = self.lambda_client.list_functions()
-            functions = resp.get("Functions", [])
-            return [
-                {
-                    "name": fn.get("FunctionName"),
-                    "runtime": fn.get("Runtime", "python3.11"),
-                    "handler": fn.get("Handler", "handler.lambda_handler"),
-                    "code_size": fn.get("CodeSize", 0),
-                    "timeout": fn.get("Timeout", 3),
-                    "last_modified": fn.get("LastModified", ""),
-                    "description": fn.get("Description", ""),
-                }
-                for fn in functions
-            ]
-        except Exception as e:
-            print(f"Error listing Lambda functions: {e}")
-            return []
+        resp = self.lambda_client.list_functions()
+        functions = resp.get("Functions", [])
+        return [
+            {
+                "name": fn.get("FunctionName"),
+                "runtime": fn.get("Runtime", "python3.11"),
+                "handler": fn.get("Handler", "handler.lambda_handler"),
+                "code_size": fn.get("CodeSize", 0),
+                "timeout": fn.get("Timeout", 3),
+                "last_modified": fn.get("LastModified", ""),
+                "description": fn.get("Description", ""),
+            }
+            for fn in functions
+        ]
 
     def create_lambda_function(
         self,
@@ -458,37 +447,29 @@ class AWSService:
     # --------------------------------------------------------------------------
     def list_event_buses(self) -> list[dict[str, Any]]:
         """Lists EventBridge event buses."""
-        try:
-            resp = self.events.list_event_buses()
-            buses = resp.get("EventBuses", [])
-            return [
-                {
-                    "name": b.get("Name"),
-                    "arn": b.get("Arn"),
-                }
-                for b in buses
-            ]
-        except Exception as e:
-            print(f"Error listing event buses: {e}")
-            return []
+        resp = self.events.list_event_buses()
+        buses = resp.get("EventBuses", [])
+        return [
+            {
+                "name": b.get("Name"),
+                "arn": b.get("Arn"),
+            }
+            for b in buses
+        ]
 
     def list_event_rules(self, event_bus_name: str = "default") -> list[dict[str, Any]]:
         """Lists rules for an event bus."""
-        try:
-            resp = self.events.list_rules(EventBusName=event_bus_name)
-            rules = resp.get("Rules", [])
-            return [
-                {
-                    "name": r.get("Name"),
-                    "state": r.get("State"),
-                    "event_pattern": r.get("EventPattern", "{}"),
-                    "description": r.get("Description", ""),
-                }
-                for r in rules
-            ]
-        except Exception as e:
-            print(f"Error listing rules for bus {event_bus_name}: {e}")
-            return []
+        resp = self.events.list_rules(EventBusName=event_bus_name)
+        rules = resp.get("Rules", [])
+        return [
+            {
+                "name": r.get("Name"),
+                "state": r.get("State"),
+                "event_pattern": r.get("EventPattern", "{}"),
+                "description": r.get("Description", ""),
+            }
+            for r in rules
+        ]
 
     def put_event(
         self,
@@ -523,22 +504,18 @@ class AWSService:
     # --------------------------------------------------------------------------
     def list_kinesis_streams(self) -> list[dict[str, Any]]:
         """Lists Kinesis streams with shard counts and status."""
-        try:
-            resp = self.kinesis.list_streams()
-            names = resp.get("StreamNames", [])
-            result = []
-            for name in names:
-                try:
-                    desc = self.kinesis.describe_stream_summary(StreamName=name).get("StreamDescriptionSummary", {})
-                    status = desc.get("StreamStatus", "ACTIVE")
-                    shards = desc.get("OpenShardCount", 1)
-                except Exception:
-                    status, shards = "ACTIVE", 1
-                result.append({"name": name, "status": status, "open_shards": shards})
-            return result
-        except Exception as e:
-            print(f"Error listing Kinesis streams: {e}")
-            return []
+        resp = self.kinesis.list_streams()
+        names = resp.get("StreamNames", [])
+        result = []
+        for name in names:
+            try:
+                desc = self.kinesis.describe_stream_summary(StreamName=name).get("StreamDescriptionSummary", {})
+                status = desc.get("StreamStatus", "ACTIVE")
+                shards = desc.get("OpenShardCount", 1)
+            except ClientError:
+                status, shards = "ACTIVE", 1
+            result.append({"name": name, "status": status, "open_shards": shards})
+        return result
 
     def create_kinesis_stream(self, stream_name: str, shard_count: int = 1) -> dict[str, Any]:
         """Creates a new Kinesis data stream."""
@@ -564,8 +541,8 @@ class AWSService:
                 desc = self.kinesis.describe_stream_summary(StreamName=stream_name).get("StreamDescriptionSummary", {})
                 if desc.get("StreamStatus") == "ACTIVE":
                     break
-            except Exception:
-                pass
+            except ClientError:
+                pass  # not describable yet; PutRecord below reports a real error
             time.sleep(0.3)
 
         resp = self.kinesis.put_record(
@@ -581,39 +558,35 @@ class AWSService:
 
     def get_kinesis_records(self, stream_name: str, limit: int = 20) -> list[dict[str, Any]]:
         """Reads recent records from a Kinesis stream."""
-        try:
-            desc = self.kinesis.describe_stream(StreamName=stream_name).get("StreamDescription", {})
-            shards = desc.get("Shards", [])
-            if not shards:
-                return []
-            shard_id = shards[0]["ShardId"]
-            iter_resp = self.kinesis.get_shard_iterator(
-                StreamName=stream_name,
-                ShardId=shard_id,
-                ShardIteratorType="TRIM_HORIZON",
-            )
-            shard_iter = iter_resp.get("ShardIterator")
-            if not shard_iter:
-                return []
-            rec_resp = self.kinesis.get_records(ShardIterator=shard_iter, Limit=limit)
-            records = rec_resp.get("Records", [])
-            output = []
-            for r in records:
-                raw_data = r.get("Data", b"")
-                try:
-                    payload = raw_data.decode("utf-8")
-                except Exception:
-                    payload = str(raw_data)
-                output.append({
-                    "sequence_number": r.get("SequenceNumber"),
-                    "partition_key": r.get("PartitionKey"),
-                    "approx_arrival": r.get("ApproximateArrivalTimestamp", "").isoformat() if hasattr(r.get("ApproximateArrivalTimestamp"), "isoformat") else str(r.get("ApproximateArrivalTimestamp")),
-                    "data": payload,
-                })
-            return output
-        except Exception as e:
-            print(f"Error reading Kinesis records for {stream_name}: {e}")
+        desc = self.kinesis.describe_stream(StreamName=stream_name).get("StreamDescription", {})
+        shards = desc.get("Shards", [])
+        if not shards:
             return []
+        shard_id = shards[0]["ShardId"]
+        iter_resp = self.kinesis.get_shard_iterator(
+            StreamName=stream_name,
+            ShardId=shard_id,
+            ShardIteratorType="TRIM_HORIZON",
+        )
+        shard_iter = iter_resp.get("ShardIterator")
+        if not shard_iter:
+            return []
+        rec_resp = self.kinesis.get_records(ShardIterator=shard_iter, Limit=limit)
+        records = rec_resp.get("Records", [])
+        output = []
+        for r in records:
+            raw_data = r.get("Data", b"")
+            try:
+                payload = raw_data.decode("utf-8")
+            except Exception:
+                payload = str(raw_data)
+            output.append({
+                "sequence_number": r.get("SequenceNumber"),
+                "partition_key": r.get("PartitionKey"),
+                "approx_arrival": r.get("ApproximateArrivalTimestamp", "").isoformat() if hasattr(r.get("ApproximateArrivalTimestamp"), "isoformat") else str(r.get("ApproximateArrivalTimestamp")),
+                "data": payload,
+            })
+        return output
 
 
 # ------------------------------------------------------------------------------

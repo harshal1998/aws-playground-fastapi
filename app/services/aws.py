@@ -21,6 +21,8 @@ from app.core.config import settings
 _SERIALIZER = TypeSerializer()
 _DESERIALIZER = TypeDeserializer()
 
+SQS_QUEUE_MISSING_CODES = frozenset({"QueueDoesNotExist", "AWS.SimpleQueueService.NonExistentQueue"})
+
 LAMBDA_TIMEOUT_SECONDS = 15
 # Bounded polling for Lambda state transitions: at most ~20s per wait.
 LAMBDA_WAITER_CONFIG = {"Delay": 1, "MaxAttempts": 20}
@@ -40,6 +42,10 @@ class AWSService:
         self.region_name = region_name
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
+        # SQS queue name -> URL, so repeated operations skip GetQueueUrl.
+        # Plain dict get/set/pop are atomic under the GIL; a race at worst
+        # looks the same URL up twice.
+        self._queue_urls: dict[str, str] = {}
 
     def _get_boto_client(self, service_name: str):
         """Initializes a boto3 client configured for LocalStack."""
@@ -141,22 +147,45 @@ class AWSService:
             })
         return result
 
+    def _queue_url(self, queue_name: str) -> str:
+        """Returns the queue URL, calling GetQueueUrl only on the first use of a name."""
+        url = self._queue_urls.get(queue_name)
+        if url is None:
+            url = self.sqs.get_queue_url(QueueName=queue_name)["QueueUrl"]
+            self._queue_urls[queue_name] = url
+        return url
+
+    def _on_queue(self, queue_name: str, operation, **kwargs) -> dict[str, Any]:
+        """Runs an SQS operation against a queue by name via its cached URL.
+
+        If the queue no longer exists, its cached URL is dropped before the
+        error propagates, so a recreated queue is looked up afresh.
+        """
+        q_url = self._queue_url(queue_name)
+        try:
+            return operation(QueueUrl=q_url, **kwargs)
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") in SQS_QUEUE_MISSING_CODES:
+                self._queue_urls.pop(queue_name, None)
+            raise
+
     def create_sqs_queue(self, queue_name: str) -> dict[str, Any]:
         """Creates a new SQS queue."""
         clean_name = queue_name.strip()
         resp = self.sqs.create_queue(QueueName=clean_name)
+        self._queue_urls[clean_name] = resp["QueueUrl"]
         return {"name": clean_name, "url": resp["QueueUrl"]}
 
     def send_sqs_message(self, queue_name: str, message_body: str) -> dict[str, Any]:
         """Sends a message payload to an SQS queue."""
-        q_url = self.sqs.get_queue_url(QueueName=queue_name)["QueueUrl"]
-        resp = self.sqs.send_message(QueueUrl=q_url, MessageBody=message_body)
+        resp = self._on_queue(queue_name, self.sqs.send_message, MessageBody=message_body)
         return {"message_id": resp.get("MessageId"), "status": "sent"}
 
     def receive_sqs_messages(self, queue_name: str, max_messages: int = 5) -> list[dict[str, Any]]:
         """Receives up to max_messages from an SQS queue without deleting."""
-        q_url = self.sqs.get_queue_url(QueueName=queue_name)["QueueUrl"]
-        resp = self.sqs.receive_message(QueueUrl=q_url, MaxNumberOfMessages=max_messages, WaitTimeSeconds=1)
+        resp = self._on_queue(
+            queue_name, self.sqs.receive_message, MaxNumberOfMessages=max_messages, WaitTimeSeconds=1
+        )
         msgs = resp.get("Messages", [])
         return [
             {
@@ -169,8 +198,7 @@ class AWSService:
 
     def purge_sqs_queue(self, queue_name: str) -> dict[str, str]:
         """Purges all messages from an SQS queue."""
-        q_url = self.sqs.get_queue_url(QueueName=queue_name)["QueueUrl"]
-        self.sqs.purge_queue(QueueUrl=q_url)
+        self._on_queue(queue_name, self.sqs.purge_queue)
         return {"status": "purged", "queue": queue_name}
 
     # --------------------------------------------------------------------------

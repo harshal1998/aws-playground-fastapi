@@ -348,7 +348,7 @@ def test_created_item_shows_up_in_cached_list():
 
 
 # ------------------------------------------------------------------------------
-# Round-trips: CreateBucket once
+# Round-trips: CreateBucket once, GetQueueUrl once per queue
 # ------------------------------------------------------------------------------
 
 
@@ -435,3 +435,60 @@ def test_s3_bucket_recreated_when_it_disappears():
     stub.bucket_exists = False  # LocalStack restarted without persistence
     assert service.list_bucket_objects()["count"] == 0
     assert stub.calls["create_bucket"] == 2
+
+
+class _SQSStub:
+    """SQS client stub counting GetQueueUrl calls."""
+
+    def __init__(self):
+        self.get_queue_url_calls = 0
+        self.missing = False
+
+    def get_queue_url(self, QueueName):
+        self.get_queue_url_calls += 1
+        if self.missing:
+            raise _client_error("AWS.SimpleQueueService.NonExistentQueue")
+        return {"QueueUrl": f"http://localstack:4566/000000000000/{QueueName}"}
+
+    def send_message(self, QueueUrl, MessageBody):
+        if self.missing:
+            raise _client_error("AWS.SimpleQueueService.NonExistentQueue")
+        return {"MessageId": "m-1"}
+
+    def purge_queue(self, QueueUrl):
+        if self.missing:
+            raise _client_error("QueueDoesNotExist")
+
+
+def _sqs_service(stub):
+    service = AWSService()
+    service.__dict__["sqs"] = stub
+    return service
+
+
+def test_sqs_queue_url_is_looked_up_once_per_queue():
+    """Verify repeated SQS operations on one queue call GetQueueUrl only once."""
+    stub = _SQSStub()
+    service = _sqs_service(stub)
+    for _ in range(3):
+        service.send_sqs_message("orders", "hi")
+    service.purge_sqs_queue("orders")
+    assert stub.get_queue_url_calls == 1
+
+
+def test_sqs_queue_url_cache_is_dropped_when_queue_is_missing():
+    """Verify a QueueDoesNotExist error evicts the cached URL so it is looked up again."""
+    stub = _SQSStub()
+    service = _sqs_service(stub)
+    service.send_sqs_message("orders", "hi")
+    stub.missing = True
+    try:
+        service.purge_sqs_queue("orders")
+    except ClientError:
+        pass
+    else:
+        raise AssertionError("purge of a deleted queue should raise")
+    assert "orders" not in service._queue_urls
+    stub.missing = False
+    service.send_sqs_message("orders", "again")
+    assert stub.get_queue_url_calls == 2

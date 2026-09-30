@@ -58,29 +58,21 @@ class S3Service:
     def list_bucket_objects(self) -> dict:
         """Lists all objects in the configured S3 bucket."""
         self.ensure_bucket_exists()
-        try:
-            response = self.client.list_objects_v2(Bucket=self.bucket_name)
-            contents = response.get("Contents", [])
-            objects = [
-                {
-                    "key": obj["Key"],
-                    "size_bytes": obj["Size"],
-                    "last_modified": obj["LastModified"].isoformat(),
-                }
-                for obj in contents
-            ]
-            return {
-                "bucket": self.bucket_name,
-                "count": len(objects),
-                "objects": objects,
+        response = self.client.list_objects_v2(Bucket=self.bucket_name)
+        contents = response.get("Contents", [])
+        objects = [
+            {
+                "key": obj["Key"],
+                "size_bytes": obj["Size"],
+                "last_modified": obj["LastModified"].isoformat(),
             }
-        except ClientError as e:
-            return {
-                "bucket": self.bucket_name,
-                "count": 0,
-                "objects": [],
-                "error": str(e),
-            }
+            for obj in contents
+        ]
+        return {
+            "bucket": self.bucket_name,
+            "count": len(objects),
+            "objects": objects,
+        }
 
     def get_object_content(self, key: str) -> tuple[bytes, str]:
         """Retrieves object content and its content-type from S3."""

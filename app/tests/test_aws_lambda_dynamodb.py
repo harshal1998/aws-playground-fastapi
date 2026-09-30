@@ -127,4 +127,4 @@ def test_aws_dynamodb_scan_missing_table_reports_error():
         f"{API_URL}/aws/dynamodb/items",
         params={"table_name": "test_pytest_table_that_does_not_exist"},
     )
-    assert scan_res.status_code == 400
+    assert scan_res.status_code == 404

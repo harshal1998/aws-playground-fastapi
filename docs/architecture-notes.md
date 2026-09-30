@@ -56,10 +56,14 @@ caller.
 
 ## Redis and Postgres treated as fault-tolerant dependencies
 
-`RedisDep` can resolve to `None` (see `app/api/deps.py`), and every caller
-(`items_service.get_items`, `get_item_by_id`, `create_item`) checks `if redis_client:` before
-using it, falling back to direct Postgres reads/writes. Postgres, by contrast, has no such
-fallback — `DbPoolDep` always returns a pool or raises. This reflects Redis's role in this repo as
+`RedisDep` can resolve to `None` (see `app/api/deps.py`), and `items_service.get_items`,
+`get_item_by_id` and `create_item` only touch Redis through small helpers in
+`app/services/items.py` that skip the call when the client is `None` and catch Redis errors
+(including timeouts, bounded by `REDIS_SOCKET_TIMEOUT`), logging a warning and falling back to
+direct Postgres reads/writes. So a Redis outage *while the API is running* never fails a
+request. (Redis must still be reachable when the API *starts*: `connect_to_redis()` retries and
+then raises.) Postgres, by contrast, has no such fallback — `DbPoolDep` always returns a pool
+or raises. This reflects Redis's role in this repo as
 a demonstrable *cache* (optional, degrades gracefully) versus Postgres as the *source of truth*
 (required). Keep this asymmetry in mind if adding new cached data — the pattern is "cache-aside
 with graceful degradation," not "cache-required."
@@ -69,4 +73,7 @@ with graceful degradation," not "cache-required."
 There is no auth middleware, API key check, or user model in the app. This is consistent with the
 project's purpose (a local playground exposed at `localhost`, fronted by Nginx with no TLS) —
 not an oversight to "fix," but also not a pattern to carry over if this code is ever used as a
-starting point for something internet-facing.
+starting point for something internet-facing. The compensating control is network exposure:
+every published port in `compose.yml` binds to `BIND_ADDRESS` (default `127.0.0.1`), so only
+the local machine can reach the API, which can deploy Lambda code, and LocalStack, which has
+the Docker socket mounted. Setting `BIND_ADDRESS=0.0.0.0` removes that control.

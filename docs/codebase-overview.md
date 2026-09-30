@@ -12,10 +12,14 @@ services and two profile-gated one-shot services.
 ## Core app (`app/`)
 
 - **`main.py`** — FastAPI app with lifespan hooks: opens the Postgres pool, connects Redis,
-  ensures the S3 bucket exists on startup; adds a Prometheus metrics middleware; exposes `/metrics`.
+  ensures the S3 bucket exists on startup (logs and carries on if LocalStack is unreachable);
+  adds a Prometheus metrics middleware; exposes `/metrics`.
 - **`core/`** — thin infra wrappers:
   - `database.py` — asyncpg pool with retry-loop connect (no DDL; tables come from Alembic).
-  - `redis.py` — redis.asyncio client with retry.
+  - `redis.py` — redis.asyncio client with retry and short socket timeouts
+    (`REDIS_SOCKET_CONNECT_TIMEOUT` / `REDIS_SOCKET_TIMEOUT`, 1s each).
+  - `boto.py` — shared botocore `Config` (connect/read timeouts, retry attempts) for every boto3
+    client.
   - `metrics.py` — request counter + latency histogram middleware, labelled by route template;
     aggregates all uvicorn workers when `PROMETHEUS_MULTIPROC_DIR` is set.
   - `config.py` — a frozen dataclass `Settings` reading env vars (no pydantic-settings).
@@ -30,13 +34,17 @@ services and two profile-gated one-shot services.
   - `s3.py` — class-based `S3Service` (singleton via `get_s3_service()`), boto3 client pointed at
     LocalStack, bucket ensure/list/get/put/delete.
   - `aws.py` — larger class-based `AWSService` wrapping SQS, DynamoDB, Secrets Manager, Lambda
-    (zips code on the fly), EventBridge, and Kinesis — all against LocalStack, all with broad
-    `except Exception` swallowing that returns empty lists/defaults rather than propagating.
+    (zips code on the fly), EventBridge, and Kinesis — all against LocalStack. The `list_*`
+    methods swallow errors broadly (`except Exception`) and return empty lists; create/put/
+    delete/scan/invoke let errors propagate so the endpoint can return a 4xx.
   - `email.py` — fire-and-forget SMTP to Mailpit, used as a FastAPI `BackgroundTask` on item
     creation.
-- **`tests/test_api.py`** — integration tests (not unit tests) that hit a **live running stack**
-  via `requests`, covering items CRUD/cache, S3, and every AWS service lifecycle (SQS, DynamoDB,
-  EventBridge, Kinesis, Lambda).
+- **`tests/`** — mostly integration tests that hit a **live running stack** via `requests`:
+  `test_api.py` (items CRUD/cache, S3, and the SQS, DynamoDB, EventBridge, Kinesis and Lambda
+  lifecycles), `test_items_validation.py` (422 input limits), `test_aws_lambda_dynamodb.py`
+  (Lambda errors/redeploys, DynamoDB native types) and `test_s3_and_cache.py` (S3 upload
+  limits/downloads, plus Redis-outage tests that call `app/services/items.py` directly with
+  stub Redis/Postgres clients).
 - **`alembic/`** — one migration (`001_create_items_table`), the only place the `items` table
   is created; the `api` container runs `alembic upgrade head` on every start.
 
@@ -55,5 +63,6 @@ vanilla-JS "Developer Portal" at `docker/portal/`), Locust (load testing), plus 
   body.
 - `aws.py` has a lot of repeated `try/except Exception: print(...); return []` boilerplate across
   list operations — a candidate for simplification if consolidating error handling.
-- Tests require the full stack running (`docker compose up`) — they're integration, not isolated
-  unit tests.
+- Tests require the full stack running (`docker compose up`) — almost all are integration tests;
+  only the stubbed Redis-outage tests in `test_s3_and_cache.py` run without the stack (they
+  still need the app's Python dependencies installed).

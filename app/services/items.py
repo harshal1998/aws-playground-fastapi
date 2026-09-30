@@ -1,10 +1,52 @@
 import json
+import logging
 import socket
 
 import asyncpg
 import redis.asyncio as aioredis
 
 from app.schemas.item import ItemCreate
+
+logger = logging.getLogger(__name__)
+
+# The cache is best-effort: any of these from Redis must never fail a request.
+CACHE_ERRORS = (aioredis.RedisError, OSError)
+
+CACHE_TTL_SECONDS = 60
+
+
+async def _cache_get(redis_client: aioredis.Redis | None, key: str) -> str | None:
+    """Reads a cache key, returning None on a miss or if Redis is unavailable."""
+    if not redis_client:
+        return None
+    try:
+        return await redis_client.get(key)
+    except CACHE_ERRORS as e:
+        logger.warning("Redis cache read failed for %s, falling back to PostgreSQL: %s", key, e)
+        return None
+
+
+async def _cache_set(redis_client: aioredis.Redis | None, key: str, value: dict) -> None:
+    """Writes a cache key with a TTL, ignoring Redis failures."""
+    if not redis_client:
+        return
+    try:
+        await redis_client.setex(key, CACHE_TTL_SECONDS, json.dumps(value))
+    except CACHE_ERRORS as e:
+        logger.warning("Redis cache write failed for %s: %s", key, e)
+
+
+async def _cache_invalidate_items(redis_client: aioredis.Redis | None) -> None:
+    """Drops all cached item entries, ignoring Redis failures."""
+    if not redis_client:
+        return
+    try:
+        keys = [key async for key in redis_client.scan_iter(match="items:*")]
+        keys += [key async for key in redis_client.scan_iter(match="item:*")]
+        if keys:
+            await redis_client.delete(*keys)
+    except CACHE_ERRORS as e:
+        logger.warning("Redis cache invalidation failed: %s", e)
 
 
 async def create_item(
@@ -24,11 +66,7 @@ async def create_item(
         item.is_offer,
     )
 
-    if redis_client:
-        keys = [key async for key in redis_client.scan_iter(match="items:*")]
-        keys += [key async for key in redis_client.scan_iter(match="item:*")]
-        if keys:
-            await redis_client.delete(*keys)
+    await _cache_invalidate_items(redis_client)
 
     return {
         "id": row["id"],
@@ -47,16 +85,15 @@ async def get_items(
     """Retrieves items using Redis Cache-Aside pattern falling back to PostgreSQL."""
     cache_key = f"items:limit:{limit}"
 
-    if redis_client:
-        cached_data = await redis_client.get(cache_key)
-        if cached_data:
-            data = json.loads(cached_data)
-            return {
-                "source": "cache (Redis)",
-                "count": data["count"],
-                "items": data["items"],
-                "container_id": socket.gethostname(),
-            }
+    cached_data = await _cache_get(redis_client, cache_key)
+    if cached_data:
+        data = json.loads(cached_data)
+        return {
+            "source": "cache (Redis)",
+            "count": data["count"],
+            "items": data["items"],
+            "container_id": socket.gethostname(),
+        }
 
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -82,8 +119,7 @@ async def get_items(
 
         result = {"count": len(items), "items": items}
 
-        if redis_client:
-            await redis_client.setex(cache_key, 60, json.dumps(result))
+        await _cache_set(redis_client, cache_key, result)
 
         return {
             "source": "database (PostgreSQL)",
@@ -101,10 +137,9 @@ async def get_item_by_id(
     """Retrieves a single item by ID, checking cache first."""
     cache_key = f"item:{item_id}"
 
-    if redis_client:
-        cached_item = await redis_client.get(cache_key)
-        if cached_item:
-            return json.loads(cached_item)
+    cached_item = await _cache_get(redis_client, cache_key)
+    if cached_item:
+        return json.loads(cached_item)
 
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -126,7 +161,6 @@ async def get_item_by_id(
             "created_at": row["created_at"].isoformat() if row["created_at"] else None,
         }
 
-        if redis_client:
-            await redis_client.setex(cache_key, 60, json.dumps(item_data))
+        await _cache_set(redis_client, cache_key, item_data)
 
         return item_data

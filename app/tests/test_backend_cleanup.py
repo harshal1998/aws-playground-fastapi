@@ -304,3 +304,29 @@ def test_metrics_middleware_labels_route_template_and_status():
     assert _count("/things-35/boom/now", "500") == before_err + 1
     latency = REGISTRY.get_sample_value("http_request_duration_seconds_count", {"endpoint": "/things-35/{thing_id}"})
     assert latency == before_latency + 2
+
+
+# ------------------------------------------------------------------------------
+# root_path="/api" (live, direct on the API port)
+# ------------------------------------------------------------------------------
+
+
+def test_openapi_and_docs_point_at_the_api_prefix():
+    """Verify Swagger's generated URLs use /api so they work through nginx."""
+    spec = requests.get(f"{API_URL}/openapi.json", timeout=TIMEOUT)
+    assert spec.status_code == 200
+    assert spec.json()["servers"] == [{"url": "/api"}]
+    assert "/items" in spec.json()["paths"]
+    docs = requests.get(f"{API_URL}/docs", timeout=TIMEOUT)
+    assert docs.status_code == 200
+    assert "/api/openapi.json" in docs.text
+
+
+def test_routes_work_with_and_without_the_api_prefix():
+    """Verify root_path doesn't change routing on the API port (tests, Prometheus, Locust)."""
+    for path in ("/", "/api/"):
+        res = requests.get(f"{API_URL}{path}", timeout=TIMEOUT)
+        assert res.status_code == 200, path
+        assert res.json()["status"] == "online"
+    assert requests.get(f"{API_URL}/api/openapi.json", timeout=TIMEOUT).status_code == 200
+    assert requests.get(f"{API_URL}/metrics", timeout=TIMEOUT).status_code == 200

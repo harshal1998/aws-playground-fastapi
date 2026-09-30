@@ -103,11 +103,18 @@
     // -------------------------------------------------------------------------
     // Utilities & Toast
     // -------------------------------------------------------------------------
+    let toastTimer = null;
+
     function showToast(msg) {
       const t = document.getElementById('toast');
-      t.innerText = msg;
+      // A new toast must not be hidden early by the previous toast's timer.
+      if (toastTimer) clearTimeout(toastTimer);
       t.style.display = 'block';
-      setTimeout(() => { t.style.display = 'none'; }, 3200);
+      t.textContent = msg;  // #toast is an aria-live region, so this is announced
+      toastTimer = setTimeout(() => {
+        t.style.display = 'none';
+        toastTimer = null;
+      }, 3200);
     }
 
     function copyText(text) {

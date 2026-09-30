@@ -31,6 +31,16 @@
 - `<issue-number>-<short-kebab-case-slug>`, with no type prefix (no `fix/`, `feat/`).
   Examples: `24-speed-up-ci`, `8-dynamodb-attribute-types`, `29-critical-security-fixes`.
 
+## Working style: parallel agents (always, without being asked)
+
+- Always split work across multiple agents running in parallel to speed things up. Don't wait to be asked.
+- Give each independent unit its own agent: separate issues, separate files or areas, research or review
+  alongside implementation, bulk GitHub operations.
+- Agents that change code work in their own git worktree on their own `<issue>-<slug>` branch, so parallel
+  edits don't collide. Each opens its own PR, following every convention in this file.
+- Keep work sequential only when a step truly depends on the previous one's result. Say which files overlap
+  between parallel branches, so merge conflicts are expected.
+
 ## Before opening or updating a PR (always, without being asked)
 
 After finishing any implementation, fix or feature:

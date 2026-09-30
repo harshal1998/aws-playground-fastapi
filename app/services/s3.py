@@ -159,28 +159,3 @@ def get_s3_service() -> S3Service:
     if _s3_service is None:
         _s3_service = S3Service()
     return _s3_service
-
-
-# Module-level aliases for backwards compatibility
-def ensure_bucket_exists() -> None:
-    return get_s3_service().ensure_bucket_exists()
-
-
-def list_bucket_objects() -> dict:
-    return get_s3_service().list_bucket_objects()
-
-
-def get_object_content(key: str) -> tuple[bytes, str]:
-    return get_s3_service().get_object_content(key)
-
-
-def delete_object(key: str) -> None:
-    return get_s3_service().delete_object(key)
-
-
-def put_object_content(key: str, content: bytes, content_type: str = "application/octet-stream") -> dict:
-    return get_s3_service().put_object_content(key, content, content_type)
-
-
-def upload_sample_document(filename: str = "sample_report.txt") -> dict:
-    return get_s3_service().upload_sample_document(filename)

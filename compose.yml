@@ -195,6 +195,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+    image: aws-playground-fastapi-api:latest
     container_name: api-service
     ports:
       - "${API_PORT:-8000}:8000"
@@ -267,6 +268,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+    image: aws-playground-fastapi-api:latest
     container_name: test-runner
     command: pytest -v app/tests/
     volumes:
@@ -288,6 +290,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+    image: aws-playground-fastapi-api:latest
     container_name: migration-runner
     command: alembic upgrade head
     volumes:

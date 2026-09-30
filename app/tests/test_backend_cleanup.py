@@ -7,6 +7,7 @@ actual request parameters (MaxResults, NextToken, ContinuationToken, ...)
 are checked without needing LocalStack. Integration tests use `requests`
 against API_URL (live stack).
 """
+import asyncio
 import datetime
 import os
 import time
@@ -14,7 +15,10 @@ import uuid
 
 import requests
 from botocore.stub import ANY, Stubber
+from fastapi import APIRouter, FastAPI
+from prometheus_client import REGISTRY
 
+from app.core.metrics import PrometheusMetricsMiddleware
 from app.services.aws import AWSService
 from app.services.s3 import S3Service
 
@@ -229,3 +233,74 @@ def test_kinesis_records_from_every_shard_via_api():
         assert set(written.values()) <= data, (written, data)
     finally:
         requests.delete(f"{API_URL}/aws/kinesis/streams", params={"name": stream}, timeout=TIMEOUT)
+
+
+# ------------------------------------------------------------------------------
+# Metrics middleware (in-process ASGI)
+# ------------------------------------------------------------------------------
+
+
+def _asgi_request(app, path: str) -> int:
+    """Performs a GET through an ASGI app and returns the response status."""
+
+    async def run():
+        status = None
+
+        async def receive():
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def send(message):
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+
+        scope = {
+            "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1", "method": "GET",
+            "scheme": "http", "path": path, "raw_path": path.encode(), "query_string": b"",
+            "root_path": "", "headers": [(b"host", b"testserver")],
+            "client": ("127.0.0.1", 12345), "server": ("testserver", 80),
+        }
+        try:
+            await app(scope, receive, send)
+        except RuntimeError:
+            pass  # re-raised by ServerErrorMiddleware after sending the 500
+        return status
+
+    return asyncio.run(run())
+
+
+def _count(endpoint: str, status: str) -> float:
+    value = REGISTRY.get_sample_value("http_requests_total", {"method": "GET", "endpoint": endpoint, "status": status})
+    return value or 0.0
+
+
+def test_metrics_middleware_labels_route_template_and_status():
+    """Verify the ASGI metrics middleware records route templates, statuses and failures."""
+    app = FastAPI()
+    app.add_middleware(PrometheusMetricsMiddleware)
+    router = APIRouter()
+
+    @router.get("/{thing_id}", status_code=201)
+    def get_thing(thing_id: int):
+        return {"id": thing_id}
+
+    @router.get("/boom/now")
+    def boom():
+        raise RuntimeError("boom")
+
+    app.include_router(router, prefix="/things-35")
+
+    before_ok = _count("/things-35/{thing_id}", "201")
+    before_err = _count("/things-35/boom/now", "500")
+    before_latency = REGISTRY.get_sample_value(
+        "http_request_duration_seconds_count", {"endpoint": "/things-35/{thing_id}"}
+    ) or 0.0
+
+    assert _asgi_request(app, "/things-35/1") == 201
+    assert _asgi_request(app, "/things-35/2") == 201
+    assert _asgi_request(app, "/things-35/boom/now") == 500
+
+    assert _count("/things-35/{thing_id}", "201") == before_ok + 2
+    assert _count("/things-35/boom/now", "500") == before_err + 1
+    latency = REGISTRY.get_sample_value("http_request_duration_seconds_count", {"endpoint": "/things-35/{thing_id}"})
+    assert latency == before_latency + 2

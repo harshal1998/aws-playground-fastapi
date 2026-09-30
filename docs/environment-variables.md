@@ -4,8 +4,10 @@ There are two layers of configuration in this repo, and they don't fully overlap
 
 1. **`.env`** (copied from `.env.example`) — read by `compose.yml` on the host. Controls
    container credentials and which host ports services are published on.
-2. **`app/core/config.py`'s `Settings`** — read *inside* the `api` container at runtime via
-   `os.getenv`. Some of these are set by `compose.yml`'s `api.environment:` block (hardcoded to
+2. **`app/core/config.py`'s `Settings`** — a `pydantic-settings` class read *inside* the `api`
+   container at runtime: process environment first, then a `.env` file in the working directory,
+   then the code default. Values are type-checked, so a malformed one (e.g. `API_PORT=abc`) stops
+   startup with a validation error naming the variable. Some of these are set by `compose.yml`'s `api.environment:` block (hardcoded to
    Docker service names like `db`, `redis`, `mailpit`, `localstack`), not by `.env` — so editing
    `.env` alone won't change them for the containerized app. They matter most when running the API
    directly on the host (`dev.ps1 run` / bare `uvicorn`), where `localhost` is substituted instead.

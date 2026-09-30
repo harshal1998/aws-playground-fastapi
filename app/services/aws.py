@@ -2,17 +2,23 @@
 Unified AWS Services Integration for LocalStack.
 Provides a class-based AWSService managing SQS, DynamoDB, Secrets Manager, Lambda, EventBridge, and Kinesis.
 """
+import base64
 import io
 import json
 import urllib.request
 import zipfile
+from decimal import Decimal
 from functools import cached_property
 from typing import Any
 
 import boto3
+from boto3.dynamodb.types import Binary, TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
 
 from app.core.config import settings
+
+_SERIALIZER = TypeSerializer()
+_DESERIALIZER = TypeDeserializer()
 
 
 class AWSService:
@@ -211,53 +217,53 @@ class AWSService:
         return {"status": "deleted", "table": table_name}
 
     @staticmethod
-    def _unwrap_dynamodb_value(v: dict[str, Any]) -> Any:
-        """Recursively unwraps a single DynamoDB attribute-value dict into a plain Python value."""
-        if "S" in v:
-            return v["S"]
-        elif "N" in v:
-            return float(v["N"]) if "." in v["N"] else int(v["N"])
-        elif "BOOL" in v:
-            return v["BOOL"]
-        elif "NULL" in v:
-            return None
-        elif "L" in v:
-            return [AWSService._unwrap_dynamodb_value(item) for item in v["L"]]
-        elif "M" in v:
-            return {mk: AWSService._unwrap_dynamodb_value(mv) for mk, mv in v["M"].items()}
-        elif "SS" in v:
-            return list(v["SS"])
-        elif "NS" in v:
-            return [float(n) if "." in n else int(n) for n in v["NS"]]
-        else:
-            return str(v)
+    def _to_dynamodb_compatible(value: Any) -> Any:
+        """Recursively converts floats to Decimal so TypeSerializer accepts them.
+
+        str() is used so 99.99 becomes Decimal("99.99") rather than the
+        binary expansion of the float.
+        """
+        if isinstance(value, float):
+            return Decimal(str(value))
+        if isinstance(value, dict):
+            return {k: AWSService._to_dynamodb_compatible(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [AWSService._to_dynamodb_compatible(v) for v in value]
+        return value
+
+    @staticmethod
+    def _to_json_compatible(value: Any) -> Any:
+        """Recursively converts deserialized DynamoDB values into JSON-friendly types.
+
+        Decimal becomes int when integral and float otherwise, sets become
+        lists and binary values become base64 strings.
+        """
+        if isinstance(value, Decimal):
+            return int(value) if value == value.to_integral_value() else float(value)
+        if isinstance(value, dict):
+            return {k: AWSService._to_json_compatible(v) for k, v in value.items()}
+        if isinstance(value, (list, set, frozenset)):
+            return [AWSService._to_json_compatible(v) for v in value]
+        if isinstance(value, Binary):
+            return base64.b64encode(value.value).decode("ascii")
+        if isinstance(value, (bytes, bytearray)):
+            return base64.b64encode(bytes(value)).decode("ascii")
+        return value
 
     def scan_dynamodb_items(self, table_name: str, limit: int = 50) -> list[dict[str, Any]]:
-        """Scans and returns items from a DynamoDB table formatted as JSON."""
-        try:
-            resp = self.dynamodb.scan(TableName=table_name, Limit=limit)
-            items = resp.get("Items", [])
-            clean_items = []
-            for it in items:
-                row = {k: self._unwrap_dynamodb_value(v) for k, v in it.items()}
-                clean_items.append(row)
-            return clean_items
-        except Exception as e:
-            print(f"Error scanning DynamoDB table {table_name}: {e}")
-            return []
+        """Scans and returns items from a DynamoDB table as plain JSON values."""
+        resp = self.dynamodb.scan(TableName=table_name, Limit=limit)
+        return [
+            {k: self._to_json_compatible(_DESERIALIZER.deserialize(v)) for k, v in item.items()}
+            for item in resp.get("Items", [])
+        ]
 
     def put_dynamodb_item(self, table_name: str, item_dict: dict[str, Any]) -> dict[str, str]:
-        """Inserts a document into a DynamoDB table."""
-        dynamo_item = {}
-        for k, v in item_dict.items():
-            if isinstance(v, bool):
-                dynamo_item[k] = {"BOOL": v}
-            elif isinstance(v, (int, float)):
-                dynamo_item[k] = {"N": str(v)}
-            elif isinstance(v, (dict, list)):
-                dynamo_item[k] = {"S": json.dumps(v)}
-            else:
-                dynamo_item[k] = {"S": str(v)}
+        """Inserts a document into a DynamoDB table using native attribute types."""
+        dynamo_item = {
+            k: _SERIALIZER.serialize(self._to_dynamodb_compatible(v))
+            for k, v in item_dict.items()
+        }
         self.dynamodb.put_item(TableName=table_name, Item=dynamo_item)
         return {"status": "inserted", "table": table_name}
 

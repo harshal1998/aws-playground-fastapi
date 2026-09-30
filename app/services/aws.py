@@ -13,12 +13,16 @@ from typing import Any
 
 import boto3
 from boto3.dynamodb.types import Binary, TypeDeserializer, TypeSerializer
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, WaiterError
 
 from app.core.config import settings
 
 _SERIALIZER = TypeSerializer()
 _DESERIALIZER = TypeDeserializer()
+
+LAMBDA_TIMEOUT_SECONDS = 15
+# Bounded polling for Lambda state transitions: at most ~20s per wait.
+LAMBDA_WAITER_CONFIG = {"Delay": 1, "MaxAttempts": 20}
 
 
 class AWSService:
@@ -350,49 +354,71 @@ class AWSService:
         buf.seek(0)
         zip_bytes = buf.read()
 
+        role = "arn:aws:iam::000000000000:role/lambda-role"
+        desc = description or f"Local Lambda {clean_name}"
         try:
             resp = self.lambda_client.create_function(
                 FunctionName=clean_name,
                 Runtime=runtime,
-                Role="arn:aws:iam::000000000000:role/lambda-role",
+                Role=role,
                 Handler=handler,
                 Code={"ZipFile": zip_bytes},
-                Description=description or f"Local Lambda {clean_name}",
-                Timeout=15,
+                Description=desc,
+                Timeout=LAMBDA_TIMEOUT_SECONDS,
             )
-            return {"status": "created", "name": clean_name, "arn": resp.get("FunctionArn")}
+            state = self._wait_for_lambda(clean_name, "function_active_v2")
+            return {"status": "created", "name": clean_name, "arn": resp.get("FunctionArn"), "state": state}
         except ClientError as e:
-            if e.response.get("Error", {}).get("Code") == "ResourceConflictException":
-                try:
-                    self.lambda_client.delete_function(FunctionName=clean_name)
-                except Exception:
-                    pass
-                resp = self.lambda_client.create_function(
-                    FunctionName=clean_name,
-                    Runtime=runtime,
-                    Role="arn:aws:iam::000000000000:role/lambda-role",
-                    Handler=handler,
-                    Code={"ZipFile": zip_bytes},
-                    Description=description or f"Local Lambda {clean_name}",
-                    Timeout=15,
-                )
-                return {"status": "recreated", "name": clean_name, "arn": resp.get("FunctionArn")}
-            raise
+            if e.response.get("Error", {}).get("Code") != "ResourceConflictException":
+                raise
+
+        # The function already exists: update it in place so its ARN,
+        # permissions and event source mappings are preserved.
+        resp = self.lambda_client.update_function_code(FunctionName=clean_name, ZipFile=zip_bytes)
+        state = self._wait_for_lambda(clean_name, "function_updated_v2")
+        if (
+            resp.get("Runtime") != runtime
+            or resp.get("Handler") != handler
+            or resp.get("Description") != desc
+            or resp.get("Timeout") != LAMBDA_TIMEOUT_SECONDS
+        ):
+            resp = self.lambda_client.update_function_configuration(
+                FunctionName=clean_name,
+                Runtime=runtime,
+                Handler=handler,
+                Description=desc,
+                Timeout=LAMBDA_TIMEOUT_SECONDS,
+            )
+            state = self._wait_for_lambda(clean_name, "function_updated_v2")
+        return {"status": "updated", "name": clean_name, "arn": resp.get("FunctionArn"), "state": state}
+
+    def _wait_for_lambda(self, function_name: str, waiter_name: str) -> str:
+        """Waits for a Lambda function to settle using a bounded boto3 waiter.
+
+        waiter_name is "function_active_v2" after a create or
+        "function_updated_v2" after a code/configuration update. Returns
+        "ready" on success, or "pending" if the waiter gave up (LocalStack
+        can be slow to start a runtime), so callers never block unbounded.
+        """
+        try:
+            self.lambda_client.get_waiter(waiter_name).wait(
+                FunctionName=function_name, WaiterConfig=LAMBDA_WAITER_CONFIG
+            )
+            return "ready"
+        except WaiterError as e:
+            print(f"Lambda {function_name} not ready after {waiter_name}: {e}")
+            return "pending"
 
     def invoke_lambda_function(self, function_name: str, payload: dict[str, Any] | str = "") -> dict[str, Any]:
-        """Invokes a Lambda function and returns the execution payload."""
-        import time
+        """Invokes a Lambda function and returns the execution payload.
 
-        # Wait until function transitions from Pending to Active
-        for _ in range(20):
-            try:
-                fn_info = self.lambda_client.get_function(FunctionName=function_name)
-                state = fn_info.get("Configuration", {}).get("State", "Active")
-                if state == "Active":
-                    break
-            except Exception:
-                pass
-            time.sleep(0.5)
+        "executed" is False when the function itself failed (FunctionError is
+        set on the invoke response); "result" then holds the error payload
+        (errorMessage, errorType, stackTrace) and "error" the error kind.
+        """
+        # A freshly deployed function may still be Pending; the waiter returns
+        # at once when it is Active and otherwise polls for a bounded time.
+        self._wait_for_lambda(function_name, "function_active_v2")
 
         if isinstance(payload, dict):
             payload_bytes = json.dumps(payload).encode("utf-8")
@@ -409,12 +435,16 @@ class AWSService:
         except Exception:
             result_json = raw_result
 
-        return {
+        function_error = resp.get("FunctionError")
+        result = {
             "status_code": status_code,
             "function": function_name,
-            "executed": True,
+            "executed": function_error is None,
             "result": result_json,
         }
+        if function_error is not None:
+            result["error"] = function_error
+        return result
 
     def delete_lambda_function(self, function_name: str) -> dict[str, str]:
         """Deletes a Lambda function."""

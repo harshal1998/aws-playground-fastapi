@@ -188,7 +188,10 @@ def list_lambda_functions(aws_service: AWSServiceDep):
 
 @router.post("/lambda/functions")
 def create_lambda_function(payload: LambdaCreate, aws_service: AWSServiceDep):
-    """Creates or deploys a Python Lambda function."""
+    """Creates a Python Lambda function, or updates its code in place if it exists.
+
+    Returns "status": "created" or "updated"; the ARN is kept on update.
+    """
     try:
         return aws_service.create_lambda_function(
             function_name=payload.name,
@@ -203,7 +206,13 @@ def create_lambda_function(payload: LambdaCreate, aws_service: AWSServiceDep):
 
 @router.post("/lambda/invoke")
 def invoke_lambda_function(payload: LambdaInvoke, aws_service: AWSServiceDep):
-    """Invokes a Lambda function with a custom payload."""
+    """Invokes a Lambda function with a custom payload.
+
+    Returns 200 whenever the invoke call itself succeeded, mirroring the AWS
+    Invoke API: if the handler raised, the body has "executed": false, "error"
+    set to the FunctionError kind and "result" set to the error payload. A 400
+    means the invoke could not be made at all (e.g. unknown function).
+    """
     try:
         return aws_service.invoke_lambda_function(payload.name, payload.payload)
     except Exception as e:

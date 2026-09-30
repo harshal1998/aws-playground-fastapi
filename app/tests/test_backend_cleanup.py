@@ -1,18 +1,30 @@
 """
-Regression tests for #35 (backend cleanup): paginated AWS listings.
+Regression tests for #35 (backend cleanup): paginated AWS listings and
+Kinesis reads across shards.
 
 Unit tests drive real boto3 clients through botocore's Stubber, so the
 actual request parameters (MaxResults, NextToken, ContinuationToken, ...)
-are checked without needing LocalStack.
+are checked without needing LocalStack. Integration tests use `requests`
+against API_URL (live stack).
 """
 import datetime
+import os
+import time
+import uuid
 
+import requests
 from botocore.stub import ANY, Stubber
 
 from app.services.aws import AWSService
 from app.services.s3 import S3Service
 
+API_URL = os.getenv("API_URL", "http://localhost:8000")
+TIMEOUT = 30
 NOW = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+
+
+def _name(prefix: str) -> str:
+    return f"{prefix}-{uuid.uuid4().hex[:10]}"
 
 
 # ------------------------------------------------------------------------------
@@ -97,3 +109,123 @@ def test_list_bucket_objects_follows_continuation_token():
         stub.assert_no_pending_responses()
     assert listing["count"] == 1001
     assert listing["objects"][-1]["key"] == "k1000"
+
+
+# ------------------------------------------------------------------------------
+# Kinesis: every shard is read (unit, stubbed; and live)
+# ------------------------------------------------------------------------------
+
+SHARD_ITERATOR = "iterator-0123456789"
+
+
+def _stream_description(*shard_ids: str) -> dict:
+    return {
+        "StreamDescription": {
+            "StreamName": "s",
+            "StreamARN": "arn:aws:kinesis:us-east-1:000000000000:stream/s",
+            "StreamStatus": "ACTIVE",
+            "Shards": [
+                {
+                    "ShardId": shard_id,
+                    "HashKeyRange": {"StartingHashKey": "0", "EndingHashKey": "1"},
+                    "SequenceNumberRange": {"StartingSequenceNumber": "1"},
+                }
+                for shard_id in shard_ids
+            ],
+            "HasMoreShards": False,
+            "RetentionPeriodHours": 24,
+            "StreamCreationTimestamp": NOW,
+            "EnhancedMonitoring": [],
+        }
+    }
+
+
+def _record(seq: str, data: str, arrival: datetime.datetime) -> dict:
+    return {"SequenceNumber": seq, "PartitionKey": "pk", "Data": data.encode(), "ApproximateArrivalTimestamp": arrival}
+
+
+def _expect_iterator(stub: Stubber, shard_id: str) -> None:
+    stub.add_response(
+        "get_shard_iterator",
+        {"ShardIterator": SHARD_ITERATOR},
+        {"StreamName": "s", "ShardId": shard_id, "ShardIteratorType": "TRIM_HORIZON"},
+    )
+
+
+def _expect_records(stub: Stubber, limit: int, records: list, behind: int = 0, more: bool = True) -> None:
+    response = {"Records": records, "MillisBehindLatest": behind}
+    if more:
+        response["NextShardIterator"] = SHARD_ITERATOR
+    stub.add_response("get_records", response, {"ShardIterator": SHARD_ITERATOR, "Limit": limit})
+
+
+def test_kinesis_read_covers_every_shard_and_follows_next_shard_iterator():
+    """Verify records come from all shards, following NextShardIterator past an empty batch."""
+    service = AWSService()
+    later = NOW + datetime.timedelta(seconds=1)
+    with Stubber(service.kinesis) as stub:
+        stub.add_response("describe_stream", _stream_description("shard-0", "shard-1"), {"StreamName": "s"})
+        # shard-0: an empty batch while still behind, then its record, then caught up
+        _expect_iterator(stub, "shard-0")
+        _expect_records(stub, 10, [], behind=500)
+        _expect_records(stub, 10, [_record("1", "zero", later)])
+        _expect_records(stub, 9, [])
+        # shard-1: one older record, then the shard is closed (no next iterator)
+        _expect_iterator(stub, "shard-1")
+        _expect_records(stub, 10, [_record("2", "one", NOW)])
+        _expect_records(stub, 9, [], more=False)
+        records = service.get_kinesis_records("s", limit=10)
+        stub.assert_no_pending_responses()
+    # Merged across shards by arrival time
+    assert [r["data"] for r in records] == ["one", "zero"]
+
+
+def test_kinesis_read_is_bounded_by_limit():
+    """Verify at most `limit` records are read per shard and returned in total."""
+    service = AWSService()
+    with Stubber(service.kinesis) as stub:
+        stub.add_response("describe_stream", _stream_description("shard-0", "shard-1"), {"StreamName": "s"})
+        for shard_id in ("shard-0", "shard-1"):
+            _expect_iterator(stub, shard_id)
+            _expect_records(stub, 2, [_record(f"{shard_id}-{i}", f"{shard_id}-{i}", NOW) for i in range(2)])
+        records = service.get_kinesis_records("s", limit=2)
+        stub.assert_no_pending_responses()
+    assert [r["data"] for r in records] == ["shard-0-0", "shard-0-1"]
+
+
+def test_kinesis_records_from_every_shard_via_api():
+    """Verify GET /aws/kinesis/records returns records written to each shard of a 2-shard stream."""
+    stream = _name("test-pytest-kinesis")
+    res = requests.post(
+        f"{API_URL}/aws/kinesis/streams", json={"stream_name": stream, "shard_count": 2}, timeout=TIMEOUT
+    )
+    assert res.status_code == 200, res.text
+    try:
+        # A 2-shard stream can take a few seconds to become ACTIVE in
+        # LocalStack; putting records earlier can stall.
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            streams = requests.get(f"{API_URL}/aws/kinesis/streams", timeout=TIMEOUT).json()["streams"]
+            if any(s["name"] == stream and s["status"] == "ACTIVE" for s in streams):
+                break
+            time.sleep(1)
+        written = {}  # shard id -> first data written to it
+        for i in range(40):
+            res = requests.post(
+                f"{API_URL}/aws/kinesis/records",
+                json={"stream_name": stream, "partition_key": f"pk-{i}", "data": f"rec-{i}"},
+                timeout=60,
+            )
+            assert res.status_code == 200, res.text
+            written.setdefault(res.json()["shard_id"], f"rec-{i}")
+            if len(written) == 2:
+                break
+        assert len(written) == 2, "partition keys never hashed to both shards"
+        res = requests.get(
+            f"{API_URL}/aws/kinesis/records", params={"stream_name": stream, "limit": 50}, timeout=TIMEOUT
+        )
+        assert res.status_code == 200, res.text
+        data = {r["data"] for r in res.json()["records"]}
+        assert set(written.values()) <= data, (written, data)
+    finally:
+        requests.delete(f"{API_URL}/aws/kinesis/streams", params={"name": stream}, timeout=TIMEOUT)

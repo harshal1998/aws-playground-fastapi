@@ -14,13 +14,7 @@
 
       if (tabName === 'aws') {
         refreshAwsStatus();
-        fetchS3Objects();
-        fetchSQSQueues();
-        fetchDynamoTables();
-        fetchSecrets();
-        fetchLambdaFunctions();
-        fetchEventBuses();
-        fetchKinesisStreams();
+        Object.values(AWS_SUBTAB_LOADERS).forEach(load => load());
       }
     }
 
@@ -56,9 +50,26 @@
     }
 
 
+    // Loader for each AWS console subtab; only the selected one is refreshed.
+    const AWS_SUBTAB_LOADERS = {
+      s3: () => fetchS3Objects(),
+      sqs: () => fetchSQSQueues(),
+      dynamodb: () => fetchDynamoTables(),
+      secrets: () => fetchSecrets(),
+      lambda: () => fetchLambdaFunctions(),
+      events: () => fetchEventBuses(),
+      kinesis: () => fetchKinesisStreams(),
+    };
+
     function setAwsSubtab(subtabName, shouldScroll = false) {
-      // Ensure AWS tab is displayed
-      setPortalTab('aws');
+      const awsView = document.getElementById('view-aws');
+      if (awsView && !awsView.classList.contains('active')) {
+        // Switching into the AWS tab loads every panel once; nothing more to fetch.
+        setPortalTab('aws');
+      } else {
+        const loader = AWS_SUBTAB_LOADERS[subtabName];
+        if (loader) loader();
+      }
 
       document.querySelectorAll('.subnav-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.subtab-panel').forEach(p => p.classList.remove('active'));

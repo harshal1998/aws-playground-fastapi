@@ -364,7 +364,8 @@
 
       try {
         const res = await fetch(`/api/aws/dynamodb/items?table_name=${encodeURIComponent(tName)}`);
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || res.statusText);
         const items = data.items || [];
         currentDynamoItems = items;
 
@@ -405,7 +406,7 @@
           if (btn.dataset.action === 'delete-dynamo-item') deleteDynamoItem(btn.dataset.key);
         };
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #fb7185; padding: 18px;">Error: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #fb7185; padding: 18px;">Error: ${escapeHtml(err.message)}</td></tr>`;
         document.getElementById('dynamo-items-json').innerText = `Error: ${err.message}`;
       }
     }
@@ -492,7 +493,8 @@
           showToast(`Item inserted into ${activeDynamoTable}!`);
           scanDynamoTable(activeDynamoTable, activeDynamoPartitionKey);
         } else {
-          showToast('Insert failed');
+          const errData = await res.json().catch(() => ({}));
+          showToast(`Insert failed: ${errData.detail || res.statusText}`);
         }
       } catch (err) {
         showToast(`Insert error: ${err.message}`);

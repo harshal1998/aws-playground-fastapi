@@ -279,7 +279,9 @@ services:
       target: test
     image: aws-playground-fastapi-test:latest
     container_name: test-runner
-    command: pytest -v app/tests/
+    # No cache plugin: the container runs as a non-root user and the
+    # bind-mounted checkout may not be writable for it.
+    command: pytest -v -p no:cacheprovider app/tests/
     volumes:
       - .:/app
     environment:

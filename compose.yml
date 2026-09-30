@@ -28,7 +28,7 @@ services:
           memory: 512M
 
   pgadmin:
-    image: dpage/pgadmin4:latest
+    image: dpage/pgadmin4:9.18.0
     container_name: pgadmin-service
     restart: always
     environment:
@@ -69,7 +69,9 @@ services:
           memory: 256M
 
   redis-commander:
-    image: rediscommander/redis-commander:latest
+    # Upstream publishes versioned images on GHCR only; Docker Hub's
+    # rediscommander/redis-commander has had just `latest` since 2021.
+    image: ghcr.io/joeferner/redis-commander:0.9.1
     container_name: redis-commander-ui
     restart: always
     environment:
@@ -88,7 +90,7 @@ services:
   # 3. Local Email Sandbox (Mailpit)
   # ----------------------------------------------------------------------------
   mailpit:
-    image: axllent/mailpit:latest
+    image: axllent/mailpit:v1.31.3
     container_name: mailpit-service
     restart: always
     ports:
@@ -123,7 +125,9 @@ services:
           memory: 512M
 
   s3-browser:
-    image: stephenjr002/sairo:latest
+    # The sitecustomize.py mount below assumes this image's Python 3.12;
+    # re-check that path when bumping the tag.
+    image: stephenjr002/sairo:3.7.1
     container_name: s3-browser-ui
     restart: always
     ports:
@@ -158,7 +162,7 @@ services:
   # 5. Observability (Prometheus & Grafana)
   # ----------------------------------------------------------------------------
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.15.0
     container_name: prometheus-service
     restart: always
     ports:
@@ -172,7 +176,7 @@ services:
           memory: 256M
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.2.3
     container_name: grafana-service
     restart: always
     ports:
@@ -241,7 +245,7 @@ services:
   # 7. Reverse Proxy Gateway (Nginx)
   # ----------------------------------------------------------------------------
   nginx:
-    image: nginx:alpine
+    image: nginx:1.31.6-alpine
     container_name: nginx-gateway
     restart: always
     ports:
@@ -261,7 +265,7 @@ services:
   # 8. Testing & Load Generation (Locust, Pytest, Alembic)
   # ----------------------------------------------------------------------------
   locust:
-    image: locustio/locust
+    image: locustio/locust:2.46.6
     container_name: locust-service
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${LOCUST_PORT:-8089}:8089"

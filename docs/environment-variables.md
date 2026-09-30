@@ -38,6 +38,9 @@ There are two layers of configuration in this repo, and they don't fully overlap
 | `S3_BROWSER_PASS` | `admin` | `s3-browser` login |
 | `GATEWAY_PORT` | `80` | host port mapping for `nginx` |
 
+`compose.yml` also reads `JWT_SECRET` (the `s3-browser` token signing key), which is not in
+`.env.example`; it falls back to a fixed development value.
+
 ## Vars read by `Settings` but **not** in `.env.example`
 
 These exist in `app/core/config.py` and have code-level defaults. Some are overridden inside
@@ -61,6 +64,12 @@ default in every environment, including inside Docker.
 | `AWS_CONNECT_TIMEOUT` | `3` (seconds, botocore connect timeout) | no |
 | `AWS_READ_TIMEOUT` | `30` (seconds, botocore read timeout) | no |
 | `AWS_MAX_ATTEMPTS` | `2` (total attempts per boto3 call, incl. the first) | no |
+
+One more app-level variable is read outside `Settings`:
+
+| Variable | Default | Set by |
+| :--- | :--- | :--- |
+| `PROMETHEUS_MULTIPROC_DIR` | unset (single-process metrics) | `compose.yml` sets `/tmp/prometheus_multiproc` for `api`; read by `app/core/metrics.py` to aggregate `/metrics` across the 4 uvicorn workers. See [Observability](observability-and-load-testing.md#the-metrics-pipeline). |
 
 **Practical implication:** if you run the API in Docker, `MAILPIT_HOST` and `AWS_ENDPOINT_URL` are
 always the Docker service names regardless of `.env` — you cannot change them via `.env` without

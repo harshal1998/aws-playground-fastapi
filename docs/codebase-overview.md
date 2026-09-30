@@ -16,7 +16,8 @@ services and two profile-gated one-shot services.
 - **`core/`** — thin infra wrappers:
   - `database.py` — asyncpg pool with retry-loop connect (no DDL; tables come from Alembic).
   - `redis.py` — redis.asyncio client with retry.
-  - `metrics.py` — request counter + latency histogram middleware.
+  - `metrics.py` — request counter + latency histogram middleware, labelled by route template;
+    aggregates all uvicorn workers when `PROMETHEUS_MULTIPROC_DIR` is set.
   - `config.py` — a frozen dataclass `Settings` reading env vars (no pydantic-settings).
 - **`api/`**:
   - `deps.py` — typed `Annotated[..., Depends(...)]` aliases (`DbPoolDep`, `RedisDep`,

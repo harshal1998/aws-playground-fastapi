@@ -12,9 +12,11 @@ Browser/client request
 PrometheusMetricsMiddleware (app/core/metrics.py)
   - records REQUEST_COUNT{method, endpoint, status}
   - records REQUEST_LATENCY{endpoint} (seconds, histogram)
+  - endpoint = matched route template, e.g. /items/{item_id}
         │
         ▼
-GET /metrics  (app/main.py, prometheus_client.generate_latest())
+GET /metrics  (app/main.py → get_metrics_response() in app/core/metrics.py;
+               aggregates all uvicorn workers via PROMETHEUS_MULTIPROC_DIR)
         │
         ▼
 Prometheus (docker/prometheus/prometheus.yml)
@@ -28,16 +30,23 @@ Grafana (docker/grafana/provisioning/datasources/datasource.yml)
 ```
 
 Two custom metrics are emitted for **every** request, regardless of endpoint:
-- `http_requests_total{method, endpoint, status}` — a `Counter`, labeled by the raw
-  `request.url.path` (so `/items/1` and `/items/2` are counted as *different* endpoint labels —
-  there's no path-template normalization, which matters if you're building a Grafana query
-  expecting one series per route).
-- `http_request_duration_seconds{endpoint}` — a `Histogram` of wall-clock latency per request.
+- `http_requests_total{method, endpoint, status}` — a `Counter`, labeled by the matched route
+  template (so `/items/1` and `/items/2` both count under `endpoint="/items/{item_id}"`, one
+  series per route). Requests that match no route (404s) share the fixed label
+  `endpoint="unmatched"`, so probing random paths can't create unbounded series.
+- `http_request_duration_seconds{endpoint}` — a `Histogram` of wall-clock latency per request,
+  with the same `endpoint` label.
 
-Beyond these two, `prometheus_client` also auto-exposes its own process/GC metrics
-(`python_gc_objects_collected_total`, etc.) — which is why
-`app/tests/test_api.py::test_prometheus_metrics` checks for either metric name, since the custom
-counter won't exist yet on a totally fresh instance that hasn't served a request.
+**Multiple workers:** the `api` container runs `uvicorn --workers 4` with
+`PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus_multiproc` (set in `compose.yml`, wiped and recreated
+by the container command before uvicorn starts). Each worker writes its samples to that
+directory and `/metrics` aggregates them with `MultiProcessCollector`, so a scrape reports all
+four workers combined rather than whichever worker answered.
+
+In that multiprocess mode the response contains only these app metrics; `prometheus_client`'s
+default process/GC metrics (`python_gc_objects_collected_total`, etc.) appear only when
+`PROMETHEUS_MULTIPROC_DIR` is unset, e.g. a single host-run `dev.ps1 run` process. That's why
+`app/tests/test_api.py::test_prometheus_metrics` accepts either metric name.
 
 ## What you get out of the box vs. what you have to build
 
@@ -80,7 +89,7 @@ series immediately.
 
 ## Practical tip: watching a specific endpoint
 
-Because the `endpoint` label is the literal unnormalized path, if you're benchmarking
-`/items/{id}` for many different IDs and want one aggregate series in Grafana, you'll need to sum
-over a regex/prefix match (e.g. a query like `{endpoint=~"/items/.*"}`) rather than expecting
-Prometheus to already group them — the middleware does no route-template extraction.
+Because the `endpoint` label is the route template, benchmarking `/items/{id}` across many
+different IDs already lands in one series: query `{endpoint="/items/{item_id}"}` directly (no
+regex over raw paths needed). The label is the full template including the router prefix, e.g.
+`/items`, `/items/{item_id}`, `/s3/objects`, `/aws/sqs/queues`.

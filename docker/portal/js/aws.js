@@ -179,7 +179,7 @@
 
     function openCreateQueueModal() {
       document.getElementById('new-queue-name').value = '';
-      document.getElementById('modal-queue').classList.add('active');
+      openModal('modal-queue');
     }
 
     async function submitCreateQueue() {
@@ -288,7 +288,7 @@
     function openCreateDynamoTableModal() {
       document.getElementById('new-dynamo-table-name').value = '';
       document.getElementById('new-dynamo-key-name').value = 'id';
-      document.getElementById('modal-dynamo-table').classList.add('active');
+      openModal('modal-dynamo-table');
     }
 
     async function submitCreateDynamoTable() {
@@ -414,7 +414,7 @@
       document.getElementById('modal-edit-key-name').innerText = keyName;
       document.getElementById('modal-edit-key-value').innerText = keyValue;
       document.getElementById('edit-dynamo-item-json').value = JSON.stringify(item, null, 2);
-      modal.classList.add('active');
+      openModal(modal.id);
     }
 
     // Re-scan a table only if it is still the one on screen.
@@ -461,7 +461,7 @@
       template["name"] = "Sample Record";
       template["created_at"] = new Date().toISOString();
       document.getElementById('new-dynamo-item-json').value = JSON.stringify(template, null, 2);
-      modal.classList.add('active');
+      openModal(modal.id);
     }
 
     async function submitInsertDynamoItem() {
@@ -565,7 +565,7 @@
     function openCreateSecretModal() {
       document.getElementById('new-secret-name').value = '';
       document.getElementById('new-secret-val').value = '';
-      document.getElementById('modal-secret').classList.add('active');
+      openModal('modal-secret');
     }
 
     async function submitCreateSecret() {
@@ -587,7 +587,7 @@
         const data = await apiFetch(`/api/aws/secrets/${encodeURIComponent(name)}`);
         document.getElementById('view-secret-title').innerText = `Secret: ${name}`;
         document.getElementById('view-secret-body').innerText = data.value || '(Empty string)';
-        document.getElementById('modal-view-secret').classList.add('active');
+        openModal('modal-view-secret');
       } catch (err) {
         showToast(`Fetch secret failed: ${err.message}`);
       }
@@ -653,7 +653,7 @@
         'message': f'Hello, {name} from LocalStack Lambda!',
         'received': event
     }`;
-      document.getElementById('modal-create-lambda').classList.add('active');
+      openModal('modal-create-lambda');
     }
 
     async function submitCreateLambda() {
@@ -695,7 +695,7 @@
       document.getElementById('modal-invoke-fn-name').innerText = fnName;
       document.getElementById('invoke-lambda-payload').value = JSON.stringify({ name: "FastAPI Developer", a: 15, b: 3, op: "multiply" }, null, 2);
       document.getElementById('invoke-result-box').style.display = 'none';
-      document.getElementById('modal-invoke-lambda').classList.add('active');
+      openModal('modal-invoke-lambda');
     }
 
     async function submitInvokeLambda() {
@@ -816,7 +816,7 @@
       modal.dataset.bus = busName || 'default';
       const busLabel = document.getElementById('modal-put-event-bus');
       if (busLabel) busLabel.innerText = modal.dataset.bus;
-      modal.classList.add('active');
+      openModal(modal.id);
     }
 
     async function submitPutEvent() {
@@ -898,7 +898,7 @@
     function openCreateKinesisModal() {
       document.getElementById('new-kinesis-name').value = '';
       document.getElementById('new-kinesis-shards').value = '1';
-      document.getElementById('modal-create-kinesis').classList.add('active');
+      openModal('modal-create-kinesis');
     }
 
     async function submitCreateKinesisStream() {
@@ -929,7 +929,7 @@
     function openPutKinesisRecordModal(streamName) {
       activeKinesisStream = streamName;
       document.getElementById('modal-kinesis-put-stream').innerText = streamName;
-      document.getElementById('modal-kinesis-put').classList.add('active');
+      openModal('modal-kinesis-put');
     }
 
     async function submitPutKinesisRecord() {

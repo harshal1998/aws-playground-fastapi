@@ -32,7 +32,7 @@
       }
 
       // Force display via both class and inline style to bypass any CSS specificity issues
-      modal.classList.add('active');
+      openModal('modal-health');
       modal.style.display = 'flex';
       body.innerText = 'Fetching LocalStack health status...';
 
@@ -115,13 +115,81 @@
       showToast(`Copied to clipboard: "${text}"`);
     }
 
+    // -------------------------------------------------------------------------
+    // Modals: open/close with focus management, Escape and a Tab focus trap
+    // -------------------------------------------------------------------------
+    const MODAL_FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    function getOpenModal() {
+      const open = document.querySelectorAll('.modal-overlay.active');
+      return open.length ? open[open.length - 1] : null;
+    }
+
+    function getModalFocusables(modal) {
+      const box = modal.querySelector('.modal-box') || modal;
+      return Array.from(box.querySelectorAll(MODAL_FOCUSABLE))
+        .filter(el => el.offsetParent !== null || el === document.activeElement);
+    }
+
+    function openModal(id) {
+      const modal = document.getElementById(id);
+      if (!modal) return null;
+      // Remember what opened the modal so focus can return there on close.
+      if (!modal.classList.contains('active')) modal._returnFocus = document.activeElement;
+      modal.classList.add('active');
+
+      // Focus the first form field; fall back to the dialog itself so screen
+      // readers announce its label.
+      const box = modal.querySelector('.modal-box') || modal;
+      const field = box.querySelector('input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled])');
+      (field || box).focus();
+      return modal;
+    }
+
     function closeModal(id) {
       const el = document.getElementById(id);
       if (el) {
         el.classList.remove('active');
         el.style.display = '';  // Clear any inline style set by openHealthJsonModal
+        const trigger = el._returnFocus;
+        el._returnFocus = null;
+        if (trigger && trigger.isConnected && typeof trigger.focus === 'function') trigger.focus();
       }
     }
+
+    document.addEventListener('keydown', (e) => {
+      const modal = getOpenModal();
+      if (!modal) return;
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeModal(modal.id);
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const box = modal.querySelector('.modal-box') || modal;
+        const focusables = getModalFocusables(modal);
+        if (focusables.length === 0) {
+          e.preventDefault();
+          box.focus();
+          return;
+        }
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement;
+        if (!box.contains(active)) {
+          e.preventDefault();
+          first.focus();
+        } else if (e.shiftKey && (active === first || active === box)) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    });
 
     // -------------------------------------------------------------------------
 

@@ -324,11 +324,11 @@
             </div>
             <div style="display: grid; grid-template-columns: 1fr 2fr auto; gap: 12px; align-items: flex-end;">
               <div>
-                <label class="form-label">Target Queue</label>
+                <label class="form-label" for="sqs-send-queue-select">Target Queue</label>
                 <select id="sqs-send-queue-select" class="form-input"></select>
               </div>
               <div>
-                <label class="form-label">Message Payload (JSON or Text)</label>
+                <label class="form-label" for="sqs-send-body">Message Payload (JSON or Text)</label>
                 <input id="sqs-send-body" type="text" class="form-input" value='{"order_id": 999, "action": "process_payment"}' />
               </div>
               <button class="ctrl-btn ctrl-btn-primary" style="height: 42px;" onclick="sendSQSTestMessage()">

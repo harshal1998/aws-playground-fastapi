@@ -6,11 +6,12 @@ patterns before "fixing" something that's intentional.
 
 ## Class-based services (S3, AWS) vs. plain-function services (items, email)
 
-`S3Service` and `AWSService` are classes with `cached_property` boto3 clients and a
-module-level singleton (`get_s3_service()` / `get_aws_service()`), while `items.py` and
+`S3Service` and `AWSService` are classes that create their boto3 clients once in `__init__` (from a
+private `boto3.session.Session`, since the default session isn't thread-safe) and a module-level
+singleton (`get_s3_service()` / `get_aws_service()`, built in the app's lifespan), while `items.py` and
 `email.py` are plain functions taking a connection/client as an argument.
 
-Likely reasoning: S3/AWS integrations need to lazily construct and cache several boto3 clients
+Likely reasoning: S3/AWS integrations need to construct and share several boto3 clients
 per service (SQS, DynamoDB, Lambda, etc.) — a class is a natural place to hold that state. Items
 and email have no client-construction cost worth caching (`asyncpg`/Redis connections are already
 managed centrally via `app/core/database.py` / `app/core/redis.py` and passed in through FastAPI

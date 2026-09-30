@@ -239,7 +239,6 @@
     // -------------------------------------------------------------------------
     let activeDynamoTable = '';
     let activeDynamoPartitionKey = 'id';
-    let currentDynamoItems = [];
     // Only the latest scan may render; starting a new one aborts the previous.
     let dynamoScanController = null;
 
@@ -352,7 +351,6 @@
         );
         if (controller !== dynamoScanController) return;  // superseded by a newer scan
         const items = data.items || [];
-        currentDynamoItems = items;
 
         document.getElementById('dynamo-items-json').innerText = items.length > 0
           ? JSON.stringify(items, null, 2)
@@ -370,15 +368,17 @@
             .map(([k, v]) => `<span style="color:#94a3b8;">${escapeHtml(k)}:</span> <span style="color:#e2e8f0;">${escapeHtml(JSON.stringify(v))}</span>`)
             .join(', ');
 
+          // Each row carries its own table/key so Edit/Delete never depend on
+          // whichever table happens to be selected when the button is clicked.
           return `
-            <tr>
+            <tr data-table="${escapeHtml(tName)}" data-key-name="${escapeHtml(partitionKey)}" data-key-value="${escapeHtml(String(keyVal))}" data-idx="${idx}">
               <td class="mono-cell">${escapeHtml(String(keyVal))}</td>
               <td style="font-size: 12.5px;">${otherAttrs || '(No additional attributes)'}</td>
               <td style="text-align: right; white-space: nowrap;">
-                <button class="ctrl-btn" style="padding: 4px 8px; font-size: 11px; margin-right: 6px; background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.3); color: #38bdf8;" onclick="openEditDynamoItemModal(${idx})">
+                <button class="ctrl-btn" style="padding: 4px 8px; font-size: 11px; margin-right: 6px; background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.3); color: #38bdf8;" data-action="edit-dynamo-item">
                   ✏️ Edit
                 </button>
-                <button class="ctrl-btn ctrl-btn-danger" data-action="delete-dynamo-item" data-key="${escapeHtml(String(keyVal))}">
+                <button class="ctrl-btn ctrl-btn-danger" data-action="delete-dynamo-item">
                   Delete
                 </button>
               </td>
@@ -388,7 +388,15 @@
         tbody.onclick = (e) => {
           const btn = e.target.closest('button[data-action]');
           if (!btn) return;
-          if (btn.dataset.action === 'delete-dynamo-item') deleteDynamoItem(btn.dataset.key);
+          const row = btn.closest('tr');
+          if (!row) return;
+          const { table, keyName, keyValue, idx } = row.dataset;
+          if (btn.dataset.action === 'edit-dynamo-item') {
+            const item = items[Number(idx)];
+            if (item) openEditDynamoItemModal(table, keyName, keyValue, item);
+          } else if (btn.dataset.action === 'delete-dynamo-item') {
+            deleteDynamoItem(table, keyName, keyValue);
+          }
         };
       } catch (err) {
         if (isAbortError(err) || controller !== dynamoScanController) return;
@@ -397,20 +405,28 @@
       }
     }
 
-    function openEditDynamoItemModal(itemIndex) {
-      if (!activeDynamoTable || !currentDynamoItems[itemIndex]) return;
-      const item = currentDynamoItems[itemIndex];
-      const keyVal = item[activeDynamoPartitionKey] !== undefined ? item[activeDynamoPartitionKey] : Object.values(item)[0];
+    function openEditDynamoItemModal(tableName, keyName, keyValue, item) {
+      const modal = document.getElementById('modal-edit-dynamo-item');
+      modal.dataset.table = tableName;
+      modal.dataset.keyName = keyName;
 
-      document.getElementById('modal-edit-table-name').innerText = activeDynamoTable;
-      document.getElementById('modal-edit-key-name').innerText = activeDynamoPartitionKey;
-      document.getElementById('modal-edit-key-value').innerText = String(keyVal);
+      document.getElementById('modal-edit-table-name').innerText = tableName;
+      document.getElementById('modal-edit-key-name').innerText = keyName;
+      document.getElementById('modal-edit-key-value').innerText = keyValue;
       document.getElementById('edit-dynamo-item-json').value = JSON.stringify(item, null, 2);
-      document.getElementById('modal-edit-dynamo-item').classList.add('active');
+      modal.classList.add('active');
+    }
+
+    // Re-scan a table only if it is still the one on screen.
+    function rescanIfActive(tableName, keyName) {
+      if (activeDynamoTable === tableName) scanDynamoTable(tableName, keyName);
     }
 
     async function submitEditDynamoItem() {
-      if (!activeDynamoTable) return;
+      const modal = document.getElementById('modal-edit-dynamo-item');
+      const tableName = modal.dataset.table;
+      const keyName = modal.dataset.keyName;
+      if (!tableName || !keyName) return;
       const rawJson = document.getElementById('edit-dynamo-item-json').value.trim();
       let parsed;
       try {
@@ -419,15 +435,15 @@
         alert('Invalid JSON: ' + e.message);
         return;
       }
-      if (parsed[activeDynamoPartitionKey] === undefined) {
-        alert(`Document must contain the partition key "${activeDynamoPartitionKey}"`);
+      if (parsed[keyName] === undefined) {
+        alert(`Document must contain the partition key "${keyName}"`);
         return;
       }
       try {
-        await apiFetch('/api/aws/dynamodb/items', jsonRequest('PUT', { table_name: activeDynamoTable, item: parsed }));
+        await apiFetch('/api/aws/dynamodb/items', jsonRequest('PUT', { table_name: tableName, item: parsed }));
         closeModal('modal-edit-dynamo-item');
-        showToast(`Item updated in ${activeDynamoTable}!`);
-        scanDynamoTable(activeDynamoTable, activeDynamoPartitionKey);
+        showToast(`Item updated in ${tableName}!`);
+        rescanIfActive(tableName, keyName);
       } catch (err) {
         showToast(`Update failed: ${err.message}`);
       }
@@ -435,6 +451,9 @@
 
     function openInsertDynamoItemModal() {
       if (!activeDynamoTable) return;
+      const modal = document.getElementById('modal-dynamo-item');
+      modal.dataset.table = activeDynamoTable;
+      modal.dataset.keyName = activeDynamoPartitionKey;
       document.getElementById('modal-item-table-name').innerText = activeDynamoTable;
       document.getElementById('modal-item-key-label').innerText = activeDynamoPartitionKey;
       const template = {};
@@ -442,11 +461,14 @@
       template["name"] = "Sample Record";
       template["created_at"] = new Date().toISOString();
       document.getElementById('new-dynamo-item-json').value = JSON.stringify(template, null, 2);
-      document.getElementById('modal-dynamo-item').classList.add('active');
+      modal.classList.add('active');
     }
 
     async function submitInsertDynamoItem() {
-      if (!activeDynamoTable) return;
+      const modal = document.getElementById('modal-dynamo-item');
+      const tableName = modal.dataset.table;
+      const keyName = modal.dataset.keyName;
+      if (!tableName || !keyName) return;
       const rawJson = document.getElementById('new-dynamo-item-json').value.trim();
       let parsed;
       try {
@@ -455,26 +477,26 @@
         alert('Invalid JSON: ' + e.message);
         return;
       }
-      if (!parsed[activeDynamoPartitionKey]) {
-        alert(`Document must contain the partition key "${activeDynamoPartitionKey}"`);
+      if (!parsed[keyName]) {
+        alert(`Document must contain the partition key "${keyName}"`);
         return;
       }
       try {
-        await apiFetch('/api/aws/dynamodb/items', jsonRequest('POST', { table_name: activeDynamoTable, item: parsed }));
+        await apiFetch('/api/aws/dynamodb/items', jsonRequest('POST', { table_name: tableName, item: parsed }));
         closeModal('modal-dynamo-item');
-        showToast(`Item inserted into ${activeDynamoTable}!`);
-        scanDynamoTable(activeDynamoTable, activeDynamoPartitionKey);
+        showToast(`Item inserted into ${tableName}!`);
+        rescanIfActive(tableName, keyName);
       } catch (err) {
         showToast(`Insert failed: ${err.message}`);
       }
     }
 
-    async function deleteDynamoItem(keyVal) {
-      if (!confirm(`Delete item with ${activeDynamoPartitionKey}="${keyVal}"?`)) return;
+    async function deleteDynamoItem(tableName, keyName, keyVal) {
+      if (!confirm(`Delete item with ${keyName}="${keyVal}" from "${tableName}"?`)) return;
       try {
-        await apiFetch(`/api/aws/dynamodb/items?table_name=${encodeURIComponent(activeDynamoTable)}&key_name=${encodeURIComponent(activeDynamoPartitionKey)}&key_value=${encodeURIComponent(keyVal)}`, { method: 'DELETE' });
+        await apiFetch(`/api/aws/dynamodb/items?table_name=${encodeURIComponent(tableName)}&key_name=${encodeURIComponent(keyName)}&key_value=${encodeURIComponent(keyVal)}`, { method: 'DELETE' });
         showToast('Item deleted.');
-        scanDynamoTable(activeDynamoTable, activeDynamoPartitionKey);
+        rescanIfActive(tableName, keyName);
       } catch (err) {
         showToast(`Delete failed: ${err.message}`);
       }
@@ -482,17 +504,19 @@
 
     async function insertSampleDynamoItem() {
       if (!activeDynamoTable) return;
+      const tableName = activeDynamoTable;
+      const keyName = activeDynamoPartitionKey;
       const sample = {};
-      sample[activeDynamoPartitionKey] = `prod_${Math.floor(Date.now() / 1000)}`;
+      sample[keyName] = `prod_${Math.floor(Date.now() / 1000)}`;
       sample['title'] = 'Ultra Gaming Monitor';
       sample['price'] = 349.99;
       sample['in_stock'] = true;
       sample['created_at'] = new Date().toISOString();
 
       try {
-        await apiFetch('/api/aws/dynamodb/items', jsonRequest('POST', { table_name: activeDynamoTable, item: sample }));
-        showToast(`Inserted item into ${activeDynamoTable}!`);
-        scanDynamoTable(activeDynamoTable, activeDynamoPartitionKey);
+        await apiFetch('/api/aws/dynamodb/items', jsonRequest('POST', { table_name: tableName, item: sample }));
+        showToast(`Inserted item into ${tableName}!`);
+        rescanIfActive(tableName, keyName);
       } catch (err) {
         showToast(`Insert failed: ${err.message}`);
       }

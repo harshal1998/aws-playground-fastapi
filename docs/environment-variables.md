@@ -30,12 +30,15 @@ There are two layers of configuration in this repo, and they don't fully overlap
 | `REDIS_COMMANDER_PORT` | `8081` | host port mapping for `redis-commander` |
 | `PROMETHEUS_PORT` | `9090` | host port mapping for `prometheus` |
 | `GRAFANA_PORT` | `3000` | host port mapping for `grafana` |
+| `GRAFANA_ADMIN_USER` | `admin` | `grafana` admin login (applied only when `grafana_data` is first created) |
+| `GRAFANA_ADMIN_PASSWORD` | *(placeholder — change it; compose falls back to `admin`, dev only)* | `grafana` admin login (applied only when `grafana_data` is first created) |
 | `MAILPIT_SMTP_PORT` | `1025` | host port mapping for `mailpit` SMTP |
 | `MAILPIT_UI_PORT` | `8025` | host port mapping for `mailpit` web UI |
 | `LOCALSTACK_PORT` | `4566` | host port mapping for `localstack` |
 | `S3_BROWSER_PORT` | `8085` | host port mapping for `s3-browser` |
 | `S3_BROWSER_USER` | `admin` | `s3-browser` login |
 | `S3_BROWSER_PASS` | `admin` | `s3-browser` login |
+| `JWT_SECRET` | *(placeholder — change it, 32+ chars; compose falls back to a public dev-only value)* | `s3-browser` login token signing |
 | `GATEWAY_PORT` | `80` | host port mapping for `nginx` |
 
 `compose.yml` also reads `JWT_SECRET` (the `s3-browser` token signing key), which is not in

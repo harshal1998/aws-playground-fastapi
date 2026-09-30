@@ -45,12 +45,13 @@ six-step pattern for every service. Use this as a template when adding a new one
 5. **Add routes** in `app/api/v1/endpoints/aws.py`, grouped under a `# --- ServiceName Endpoints ---`
    comment block. Call the service method directly: no `try/except Exception` → `HTTPException(400)`
    wrapper, because the central handlers map errors to the right status. Raise `HTTPException`
-   yourself only for app-level checks (e.g. the S3 upload size 413). No new router registration is needed — `aws.router` is already mounted at
-   `/aws` in `app/api/v1/router.py`.
+   yourself only for app-level checks (e.g. the S3 upload size 413). No new router registration is
+   needed — `aws.router` is already mounted at `/aws` in `app/api/v1/router.py`.
 
 6. **Add an integration test** under `app/tests/` (for example a new `test_<service>.py`, as
-   `test_aws_lambda_dynamodb.py` does) following the `test_aws_*_lifecycle` naming convention: create → verify via list/scan → (update if applicable) → the test suite runs
-   against a live stack, so no mocking is needed or expected.
+   `test_aws_lambda_dynamodb.py` does) following the `test_aws_*_lifecycle` naming convention:
+   create → verify via list/scan → (update if applicable) → the test suite runs against a live
+   stack, so no mocking is needed or expected.
 
 ## Things to double check
 

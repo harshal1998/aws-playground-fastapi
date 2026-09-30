@@ -22,9 +22,10 @@ trusted network — the API is unauthenticated and can deploy Lambda code.
 `app/core/database.py` and `app/core/redis.py` both retry up to 10 times (2s apart) before
 raising. This is normal on a cold `docker compose up` — Postgres/Redis take a few seconds to
 become healthy and `api` has a `depends_on: condition: service_healthy` guard, but the retry loop
-is a second line of defense. If it still fails after ~20s the `api` process exits and Compose
-restarts it (`restart: unless-stopped`), so a restart loop in `docker compose ps` points here
-too. Check `docker compose logs db redis`
+is a second line of defense. If it still fails after ~20s, startup fails; whenever the container
+exits (e.g. `alembic upgrade head` in its command can't reach Postgres), Compose restarts it
+(`restart: unless-stopped`), so a restart loop in `docker compose ps` points here too. Check
+`docker compose logs db redis`
 for the actual failure (e.g. a bad `POSTGRES_PASSWORD` mismatch between `.env` and an existing
 `postgres_data` volume from a previous run — Postgres won't re-initialize credentials on an
 existing volume).

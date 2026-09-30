@@ -1,6 +1,6 @@
 import socket
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
 from app.api.deps import DbPoolDep, RedisDep
 from app.schemas.item import ItemCreate, ItemCreateResponse, ItemResponse, ItemsListResponse
@@ -32,7 +32,9 @@ async def create_item(
 async def get_items(
     pool: DbPoolDep,
     redis_client: RedisDep,
-    limit: int = 10,
+    # Bounded so bad values 422 instead of failing in Postgres, and so the
+    # number of items:limit:* cache keys stays finite
+    limit: int = Query(10, ge=1, le=100),
 ):
     """READ with Redis Cache-Aside pattern."""
     return await items_service.get_items(pool, redis_client, limit)

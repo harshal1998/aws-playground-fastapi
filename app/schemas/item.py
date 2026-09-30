@@ -2,10 +2,18 @@ from typing import List
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# Largest value NUMERIC(10, 2) can hold; anything above overflows in Postgres
+MAX_PRICE = 99_999_999.99
+
 
 class ItemBase(BaseModel):
-    name: str
-    price: float = Field(gt=0, description="Price must be greater than 0")
+    # Bounds mirror the items table: name VARCHAR(100), price NUMERIC(10, 2)
+    name: str = Field(max_length=100)
+    price: float = Field(
+        gt=0,
+        le=MAX_PRICE,
+        description="Price must be greater than 0 and at most 99999999.99",
+    )
     is_offer: bool = False
 
 

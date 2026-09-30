@@ -345,3 +345,93 @@ def test_created_item_shows_up_in_cached_list():
     after = requests.get(f"{API_URL}/items", params=params, timeout=TIMEOUT)
     assert after.status_code == 200
     assert name in [it["name"] for it in after.json()["items"]]
+
+
+# ------------------------------------------------------------------------------
+# Round-trips: CreateBucket once
+# ------------------------------------------------------------------------------
+
+
+class _S3Stub:
+    """S3 client stub counting calls; create_bucket can fail a set number of times."""
+
+    def __init__(self, create_failures: int = 0):
+        self.calls: dict[str, int] = {}
+        self.create_failures = create_failures
+        self.bucket_exists = False
+
+    def _count(self, name):
+        self.calls[name] = self.calls.get(name, 0) + 1
+
+    def create_bucket(self, Bucket):
+        self._count("create_bucket")
+        if self.create_failures:
+            self.create_failures -= 1
+            raise EndpointConnectionError(endpoint_url="http://localstack:4566")
+        self.bucket_exists = True
+
+    def _require(self):
+        if not self.bucket_exists:
+            raise _client_error("NoSuchBucket", 404)
+
+    def list_objects_v2(self, Bucket):
+        self._count("list_objects_v2")
+        self._require()
+        return {"Contents": []}
+
+    def put_object(self, Bucket, Key, Body, ContentType):
+        self._count("put_object")
+        self._require()
+
+
+def _s3_service(stub):
+    from app.services.s3 import S3Service
+
+    service = S3Service(bucket_name="test-bucket")
+    service.__dict__["client"] = stub  # pre-fill the cached_property
+    return service
+
+
+def test_s3_operations_do_not_call_create_bucket_after_startup():
+    """Verify CreateBucket runs once at startup, not before every S3 operation."""
+    stub = _S3Stub()
+    service = _s3_service(stub)
+    service.ensure_bucket_exists()
+    for _ in range(3):
+        service.list_bucket_objects()
+        service.put_object_content("k", b"v")
+    assert stub.calls["create_bucket"] == 1
+
+
+def test_s3_bucket_is_created_lazily_once_when_startup_failed():
+    """Verify a bucket that couldn't be created at startup is created on first use, once."""
+    stub = _S3Stub(create_failures=1)
+    service = _s3_service(stub)
+    service.ensure_bucket_exists()  # LocalStack down: swallowed
+    service.list_bucket_objects()
+    service.list_bucket_objects()
+    assert stub.calls["create_bucket"] == 2
+
+
+def test_s3_bucket_created_once_under_concurrent_first_use():
+    """Verify concurrent first requests create the bucket only once."""
+    import threading
+
+    stub = _S3Stub()
+    service = _s3_service(stub)
+    threads = [threading.Thread(target=service.list_bucket_objects) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert stub.calls["create_bucket"] == 1
+
+
+def test_s3_bucket_recreated_when_it_disappears():
+    """Verify a bucket lost to a LocalStack restart is recreated and the call retried."""
+    stub = _S3Stub()
+    service = _s3_service(stub)
+    service.ensure_bucket_exists()
+    stub.bucket_exists = False  # LocalStack restarted without persistence
+    assert service.list_bucket_objects()["count"] == 0
+    assert stub.calls["create_bucket"] == 2

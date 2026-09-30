@@ -411,6 +411,16 @@ def test_settings_load_dotenv_with_env_vars_taking_precedence(monkeypatch, tmp_p
     assert loaded.S3_BUCKET_NAME == "from-env"
 
 
+def test_unreadable_dotenv_is_skipped(monkeypatch):
+    """Verify a .env the (non-root) process can't read is skipped rather than crashing startup."""
+    from app.core import config
+
+    monkeypatch.setattr(config.os, "access", lambda path, mode: False)
+    assert config._readable_env_file() is None
+    monkeypatch.setattr(config.os, "access", lambda path, mode: True)
+    assert config._readable_env_file() == ".env"
+
+
 def test_settings_derive_database_url_from_postgres_vars(monkeypatch):
     """Verify DATABASE_URL still defaults to a DSN built from the POSTGRES_* values."""
     monkeypatch.delenv("DATABASE_URL", raising=False)

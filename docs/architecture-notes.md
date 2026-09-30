@@ -24,7 +24,8 @@ already-injected connection, follow the function pattern.
 `app/core/config.py` is a `pydantic-settings` `BaseSettings` class. Fields keep the same env var
 names and defaults the earlier hand-rolled dataclass had, and `settings.X` access is unchanged.
 It adds:
-- `.env` loading from the working directory. Real env vars still win, so compose.yml's
+- `.env` loading from the working directory (skipped if the process can't read it, e.g. a mode-600
+  host `.env` inside the non-root container). Real env vars still win, so compose.yml's
   `api.environment` block and `dev.ps1 run`'s inline `$env:` values take precedence. Note that a
   bare host `uvicorn` now picks up `.env.example`'s container-oriented `REDIS_URL=redis://redis:...`
   if you copied it; override it or use `dev.ps1 run`.

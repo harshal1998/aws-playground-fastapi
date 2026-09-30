@@ -18,17 +18,17 @@ managed centrally via `app/core/database.py` / `app/core/redis.py` and passed in
 needs a stateful client, follow the class pattern; if it's pure business logic over an
 already-injected connection, follow the function pattern.
 
-## Hand-rolled `Settings` dataclass instead of `pydantic-settings`
+## `pydantic-settings` for `Settings`
 
-`app/core/config.py` uses a `@dataclass(frozen=True)` reading `os.getenv()` directly rather than
-`pydantic-settings`'s `BaseSettings`. This works fine for a small, fixed set of env vars with
-simple string/int types, and avoids an extra dependency. It does mean:
-- No automatic `.env` file loading — env vars must be present in the process environment (Docker
-  Compose provides this; running bare `uvicorn` on the host requires `.env` to be sourced some
-  other way, which is why `dev.ps1 run` sets required vars inline as `$env:` before starting
-  Uvicorn).
-- No validation beyond Python's own type coercion (`int(os.getenv(...))` will raise a raw
-  `ValueError` on a malformed value, not a friendly Pydantic validation error).
+`app/core/config.py` is a `pydantic-settings` `BaseSettings` class. Fields keep the same env var
+names and defaults the earlier hand-rolled dataclass had, and `settings.X` access is unchanged.
+It adds:
+- `.env` loading from the working directory. Real env vars still win, so compose.yml's
+  `api.environment` block and `dev.ps1 run`'s inline `$env:` values take precedence. Note that a
+  bare host `uvicorn` now picks up `.env.example`'s container-oriented `REDIS_URL=redis://redis:...`
+  if you copied it; override it or use `dev.ps1 run`.
+- Validation at startup: a malformed value raises a pydantic `ValidationError` naming the variable.
+- `DATABASE_URL` still defaults to a `localhost` DSN built from the `POSTGRES_*` values.
 
 ## Schema is owned by Alembic only
 

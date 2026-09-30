@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.database import close_database_connection, connect_to_database
 from app.core.metrics import PrometheusMetricsMiddleware, get_metrics_response
 from app.core.redis import close_redis_connection, connect_to_redis
+from app.services.aws import get_aws_service
 from app.services.s3 import get_s3_service
 
 
@@ -19,7 +20,11 @@ async def lifespan(app: FastAPI):
     # 2. Connect to Redis
     app.state.redis = await connect_to_redis()
 
-    # 3. Ensure LocalStack S3 bucket exists (best-effort: if LocalStack is
+    # 3. Create the boto3 clients once, here, rather than lazily inside
+    #    threadpool threads on the first request
+    get_aws_service()
+
+    # 4. Ensure LocalStack S3 bucket exists (best-effort: if LocalStack is
     #    down, the first S3 request retries it once LocalStack is back)
     get_s3_service().ensure_bucket_exists()
 

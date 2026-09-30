@@ -6,11 +6,11 @@ import base64
 import http.client
 import io
 import json
+import threading
 import time
 import urllib.request
 import zipfile
 from decimal import Decimal
-from functools import cached_property
 from typing import Any
 
 import boto3
@@ -54,47 +54,25 @@ class AWSService:
         # looks the same URL up twice.
         self._queue_urls: dict[str, str] = {}
 
-    def _get_boto_client(self, service_name: str):
-        """Initializes a boto3 client configured for LocalStack."""
-        return boto3.client(
-            service_name,
-            endpoint_url=self.endpoint_url,
-            aws_access_key_id=self.aws_access_key_id,
-            aws_secret_access_key=self.aws_secret_access_key,
-            region_name=self.region_name,
-            config=BOTO_CLIENT_CONFIG,
+        # Every client is created here, once, from a private session: boto3's
+        # default session isn't thread-safe, so creating clients lazily from
+        # it in FastAPI's threadpool threads could race. Created clients are
+        # thread-safe and shared by all requests.
+        self._session = boto3.session.Session(
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+            region_name=region_name,
         )
+        self.sqs = self._get_boto_client("sqs")
+        self.dynamodb = self._get_boto_client("dynamodb")
+        self.secretsmanager = self._get_boto_client("secretsmanager")
+        self.lambda_client = self._get_boto_client("lambda")
+        self.events = self._get_boto_client("events")
+        self.kinesis = self._get_boto_client("kinesis")
 
-    # Cached boto3 clients
-    @cached_property
-    def sqs(self):
-        """Cached SQS boto3 client."""
-        return self._get_boto_client("sqs")
-
-    @cached_property
-    def dynamodb(self):
-        """Cached DynamoDB boto3 client."""
-        return self._get_boto_client("dynamodb")
-
-    @cached_property
-    def secretsmanager(self):
-        """Cached Secrets Manager boto3 client."""
-        return self._get_boto_client("secretsmanager")
-
-    @cached_property
-    def lambda_client(self):
-        """Cached Lambda boto3 client."""
-        return self._get_boto_client("lambda")
-
-    @cached_property
-    def events(self):
-        """Cached EventBridge boto3 client."""
-        return self._get_boto_client("events")
-
-    @cached_property
-    def kinesis(self):
-        """Cached Kinesis boto3 client."""
-        return self._get_boto_client("kinesis")
+    def _get_boto_client(self, service_name: str):
+        """Creates a boto3 client for LocalStack from this service's own session."""
+        return self._session.client(service_name, endpoint_url=self.endpoint_url, config=BOTO_CLIENT_CONFIG)
 
     # --------------------------------------------------------------------------
     # 1. LocalStack Health & Status
@@ -636,11 +614,18 @@ class AWSService:
 # Dependency Provider (FastAPI Depends)
 # ------------------------------------------------------------------------------
 _aws_service: AWSService | None = None
+_aws_service_lock = threading.Lock()
 
 
 def get_aws_service() -> AWSService:
-    """Returns a singleton AWSService instance for FastAPI dependency injection."""
+    """Returns a singleton AWSService instance for FastAPI dependency injection.
+
+    The app's lifespan creates it at startup; the lock only matters when it
+    is first used without the lifespan (e.g. an in-process test).
+    """
     global _aws_service
     if _aws_service is None:
-        _aws_service = AWSService()
+        with _aws_service_lock:
+            if _aws_service is None:
+                _aws_service = AWSService()
     return _aws_service

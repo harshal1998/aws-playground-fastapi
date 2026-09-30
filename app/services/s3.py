@@ -4,7 +4,6 @@ Provides a class-based S3Service managing buckets and object storage.
 """
 import socket
 import threading
-from functools import cached_property
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -34,17 +33,14 @@ class S3Service:
         self._bucket_ready = False
         self._bucket_lock = threading.Lock()
 
-    @cached_property
-    def client(self):
-        """Cached boto3 S3 client."""
-        return boto3.client(
-            "s3",
-            endpoint_url=self.endpoint_url,
-            aws_access_key_id=self.aws_access_key_id,
-            aws_secret_access_key=self.aws_secret_access_key,
-            region_name=self.region_name,
-            config=BOTO_CLIENT_CONFIG,
+        # Created once here from a private session (see AWSService.__init__):
+        # the default boto3 session isn't thread-safe; the client is.
+        session = boto3.session.Session(
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+            region_name=region_name,
         )
+        self.client = session.client("s3", endpoint_url=endpoint_url, config=BOTO_CLIENT_CONFIG)
 
     def _create_bucket(self) -> None:
         """Creates the bucket (an existing one is fine) and marks it ready; raises on failure."""
@@ -151,11 +147,18 @@ class S3Service:
 # Dependency Provider (FastAPI Depends)
 # ------------------------------------------------------------------------------
 _s3_service: S3Service | None = None
+_s3_service_lock = threading.Lock()
 
 
 def get_s3_service() -> S3Service:
-    """Returns a singleton S3Service instance for FastAPI dependency injection."""
+    """Returns a singleton S3Service instance for FastAPI dependency injection.
+
+    The app's lifespan creates it at startup; the lock only matters when it
+    is first used without the lifespan (e.g. an in-process test).
+    """
     global _s3_service
     if _s3_service is None:
-        _s3_service = S3Service()
+        with _s3_service_lock:
+            if _s3_service is None:
+                _s3_service = S3Service()
     return _s3_service

@@ -5,9 +5,10 @@ this stack is wired up.
 
 ## Port conflicts on startup
 
-11 services each publish a host port (see `docs/environment-variables.md` for the full list). If
-`docker compose up -d` fails or a container won't come up, check for a local process already
-bound to one of: `80, 3000, 4566, 5050, 5432, 6379, 8000, 8025, 8081, 8085, 8089, 9090, 1025`.
+The 12 long-running services publish 13 host ports between them (Mailpit publishes two; see
+`docs/environment-variables.md` for the full list), all on `BIND_ADDRESS` (`127.0.0.1` by
+default). If `docker compose up -d` fails or a container won't come up, check for a local
+process already bound to one of: `80, 3000, 4566, 5050, 5432, 6379, 8000, 8025, 8081, 8085, 8089, 9090, 1025`.
 Override the conflicting port via `.env` rather than editing `compose.yml`.
 
 ## API container can't reach Postgres/Redis on startup

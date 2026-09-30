@@ -6,7 +6,8 @@ setup/usage instructions — this file focuses on how the code is structured int
 ## What this project is
 
 A local, Docker-orchestrated **AWS/backend playground** built for learning/practicing production
-patterns — not a real deployed service. It's a FastAPI app plus an 11-service `compose.yml` stack.
+patterns — not a real deployed service. It's a FastAPI app plus a `compose.yml` stack of 12
+services and two profile-gated one-shot services.
 
 ## Core app (`app/`)
 
@@ -40,7 +41,7 @@ patterns — not a real deployed service. It's a FastAPI app plus an 11-service 
 
 ## Infrastructure (`compose.yml`, `docker/`)
 
-11 services: Postgres + pgAdmin, Redis + Redis Commander, Mailpit, LocalStack
+12 services: Postgres + pgAdmin, Redis + Redis Commander, Mailpit, LocalStack
 (S3/SQS/SNS/DynamoDB/SecretsManager/SSM/Lambda/Events/Kinesis) + a third-party S3 browser UI
 ("Sairo"), Prometheus + Grafana, the FastAPI `api` itself, Nginx (reverse proxy + serves a static
 vanilla-JS "Developer Portal" at `docker/portal/`), Locust (load testing), plus profile-gated
@@ -48,7 +49,6 @@ vanilla-JS "Developer Portal" at `docker/portal/`), Locust (load testing), plus 
 
 ## Notable observations
 
-- Not a git repo as of this writing — no version history to check.
 - `config.py`'s `DATABASE_URL` default embeds `POSTGRES_USER`/`PASSWORD` at class-definition time
   as dataclass field defaults — works, but relies on field evaluation order within the dataclass
   body.

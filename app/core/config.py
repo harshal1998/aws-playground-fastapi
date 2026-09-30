@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     PROJECT_NAME: str = "AWS Playground FastAPI"
     PROJECT_DESCRIPTION: str = (
-        "Production-grade local development stack with PostgreSQL, Redis, Mailpit, LocalStack, and Prometheus."
+        "Local development and learning stack with PostgreSQL, Redis, Mailpit, LocalStack, and Prometheus."
     )
     API_PORT: int = Field(8000, ge=1, le=65535)
 

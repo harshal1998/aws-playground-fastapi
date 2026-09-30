@@ -1,7 +1,16 @@
+import os
 import time
 
 from fastapi import Request, Response
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    REGISTRY,
+    CollectorRegistry,
+    Counter,
+    Histogram,
+    generate_latest,
+    multiprocess,
+)
 from starlette.middleware.base import BaseHTTPMiddleware
 
 # Prometheus Metrics Definitions
@@ -37,5 +46,16 @@ class PrometheusMetricsMiddleware(BaseHTTPMiddleware):
 
 
 def get_metrics_response() -> Response:
-    """Returns the generated Prometheus metrics payload."""
-    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    """Returns the generated Prometheus metrics payload.
+
+    With several uvicorn workers each process has its own registry, so a
+    scrape would only see one random worker. When PROMETHEUS_MULTIPROC_DIR
+    is set (see compose.yml), every worker writes its samples to that
+    directory and the response aggregates all of them.
+    """
+    if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
+        registry = CollectorRegistry()
+        multiprocess.MultiProcessCollector(registry)
+    else:
+        registry = REGISTRY
+    return Response(content=generate_latest(registry), media_type=CONTENT_TYPE_LATEST)

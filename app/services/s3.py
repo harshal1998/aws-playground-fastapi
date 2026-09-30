@@ -93,9 +93,21 @@ class S3Service:
         return operation(Bucket=self.bucket_name, **kwargs)
 
     def list_bucket_objects(self) -> dict:
-        """Lists all objects in the configured S3 bucket."""
-        response = self._call(self.client.list_objects_v2)
-        contents = response.get("Contents", [])
+        """Lists all objects in the configured S3 bucket, following every page.
+
+        ListObjectsV2 returns at most 1000 keys per call. Pages are followed
+        with ContinuationToken by hand (rather than a boto3 paginator) so each
+        page goes through _call and its NoSuchBucket recovery.
+        """
+        contents = []
+        page_kwargs = {}
+        while True:
+            response = self._call(self.client.list_objects_v2, **page_kwargs)
+            contents.extend(response.get("Contents", []))
+            token = response.get("NextContinuationToken")
+            if not response.get("IsTruncated") or not token:
+                break
+            page_kwargs = {"ContinuationToken": token}
         objects = [
             {
                 "key": obj["Key"],

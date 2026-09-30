@@ -35,6 +35,12 @@ LAMBDA_TIMEOUT_SECONDS = 15
 LAMBDA_WAITER_CONFIG = {"Delay": 1, "MaxAttempts": 20}
 
 
+def _paginate(client, operation: str, result_key: str, **kwargs) -> list[Any]:
+    """Collects result_key from every page of a paginated boto3 list operation."""
+    paginator = client.get_paginator(operation)
+    return [item for page in paginator.paginate(**kwargs) for item in page.get(result_key, [])]
+
+
 class AWSService:
     """Unified service class for interacting with LocalStack AWS services."""
 
@@ -119,8 +125,11 @@ class AWSService:
         Errors from ListQueues propagate (mapped to an HTTP status by the API
         exception handlers); a queue deleted mid-listing just reports 0 counts.
         """
-        resp = self.sqs.list_queues()
-        queue_urls = resp.get("QueueUrls", [])
+        # No MaxResults on purpose: LocalStack 3.8 then returns every queue,
+        # but with MaxResults it truncates the page and sends no NextToken.
+        # (Real AWS caps an unpaged call at 1000 queues.) Any NextToken
+        # that does come back is still followed.
+        queue_urls = _paginate(self.sqs, "list_queues", "QueueUrls")
         result = []
         for url in queue_urls:
             name = url.split("/")[-1]
@@ -200,8 +209,7 @@ class AWSService:
     # --------------------------------------------------------------------------
     def list_dynamodb_tables(self) -> list[dict[str, Any]]:
         """Lists DynamoDB tables with item counts and partition keys."""
-        resp = self.dynamodb.list_tables()
-        table_names = resp.get("TableNames", [])
+        table_names = _paginate(self.dynamodb, "list_tables", "TableNames")
         result = []
         for name in table_names:
             try:
@@ -302,8 +310,7 @@ class AWSService:
     # --------------------------------------------------------------------------
     def list_secrets(self) -> list[dict[str, Any]]:
         """Lists all secrets stored in Secrets Manager."""
-        resp = self.secretsmanager.list_secrets()
-        secrets_list = resp.get("SecretList", [])
+        secrets_list = _paginate(self.secretsmanager, "list_secrets", "SecretList")
         return [
             {
                 "name": s.get("Name"),
@@ -334,8 +341,7 @@ class AWSService:
     # --------------------------------------------------------------------------
     def list_lambda_functions(self) -> list[dict[str, Any]]:
         """Lists all deployed Lambda functions."""
-        resp = self.lambda_client.list_functions()
-        functions = resp.get("Functions", [])
+        functions = _paginate(self.lambda_client, "list_functions", "Functions")
         return [
             {
                 "name": fn.get("FunctionName"),

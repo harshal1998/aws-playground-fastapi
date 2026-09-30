@@ -1,10 +1,24 @@
+    // Shared helpers for the AWS console
+    // -------------------------------------------------------------------------
+    function jsonRequest(method, payload) {
+      return {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      };
+    }
+
+    function errorRow(colspan, message, padding = 20) {
+      return `<tr><td colspan="${colspan}" style="text-align: center; color: #fb7185; padding: ${padding}px;">Error: ${escapeHtml(String(message))}</td></tr>`;
+    }
+
+    // -------------------------------------------------------------------------
     // LocalStack AWS Engine Status
     // -------------------------------------------------------------------------
     async function refreshAwsStatus() {
+      const indicator = document.getElementById('aws-health-indicator');
       try {
-        const res = await fetch('/api/aws/status');
-        const data = await res.json();
-        const indicator = document.getElementById('aws-health-indicator');
+        const data = await apiFetch('/api/aws/status');
         const badge = document.getElementById('aws-service-count-badge');
         const tagsContainer = document.getElementById('aws-service-tags');
 
@@ -24,6 +38,10 @@
         }
       } catch (err) {
         console.warn('Failed to load AWS status:', err);
+        if (indicator) {
+          indicator.innerText = 'UNREACHABLE';
+          indicator.style.color = 'var(--accent-rose)';
+        }
       }
     }
 
@@ -33,9 +51,7 @@
     async function fetchS3Objects() {
       const tbody = document.getElementById('s3-files-tbody');
       try {
-        const res = await fetch('/api/s3/objects');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const data = await apiFetch('/api/s3/objects');
         const objects = data.objects || [];
 
         if (objects.length === 0) {
@@ -64,7 +80,7 @@
           if (btn.dataset.action === 'delete-s3-file') deleteS3File(btn.dataset.key);
         };
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #fb7185; padding: 20px;">Could not connect to S3: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #fb7185; padding: 20px;">Could not connect to S3: ${escapeHtml(err.message)}</td></tr>`;
       }
     }
 
@@ -74,21 +90,17 @@
 
       showToast(`Uploading "${file.name}" to S3...`);
       try {
-        const res = await fetch(`/api/s3/upload?filename=${encodeURIComponent(file.name)}`, {
+        await apiFetch(`/api/s3/upload?filename=${encodeURIComponent(file.name)}`, {
           method: 'POST',
           headers: {
             'Content-Type': file.type || 'application/octet-stream'
           },
           body: file
         });
-        if (res.ok) {
-          showToast(`Uploaded "${file.name}" (${formatBytes(file.size)}) to S3!`);
-          fetchS3Objects();
-        } else {
-          showToast(`Upload failed (HTTP ${res.status})`);
-        }
+        showToast(`Uploaded "${file.name}" (${formatBytes(file.size)}) to S3!`);
+        fetchS3Objects();
       } catch (err) {
-        showToast(`Upload error: ${err.message}`);
+        showToast(`Upload failed: ${err.message}`);
       } finally {
         event.target.value = '';
       }
@@ -97,26 +109,20 @@
     async function uploadSampleFile() {
       const filename = `doc_${Math.floor(Date.now() / 1000)}.txt`;
       try {
-        const res = await fetch(`/api/s3/upload-sample?filename=${encodeURIComponent(filename)}`, { method: 'POST' });
-        if (res.ok) {
-          showToast(`Uploaded sample "${filename}" to S3!`);
-          fetchS3Objects();
-        } else {
-          showToast(`Upload failed`);
-        }
+        await apiFetch(`/api/s3/upload-sample?filename=${encodeURIComponent(filename)}`, { method: 'POST' });
+        showToast(`Uploaded sample "${filename}" to S3!`);
+        fetchS3Objects();
       } catch (err) {
-        showToast(`Error uploading: ${err.message}`);
+        showToast(`Upload failed: ${err.message}`);
       }
     }
 
     async function deleteS3File(key) {
       if (!confirm(`Delete "${key}" from LocalStack S3?`)) return;
       try {
-        const res = await fetch(`/api/s3/file?key=${encodeURIComponent(key)}`, { method: 'DELETE' });
-        if (res.ok) {
-          showToast(`Deleted "${key}"`);
-          fetchS3Objects();
-        }
+        await apiFetch(`/api/s3/file?key=${encodeURIComponent(key)}`, { method: 'DELETE' });
+        showToast(`Deleted "${key}"`);
+        fetchS3Objects();
       } catch (err) {
         showToast(`Delete failed: ${err.message}`);
       }
@@ -131,8 +137,7 @@
       const cardCount = document.getElementById('card-sqs-count');
 
       try {
-        const res = await fetch('/api/aws/sqs/queues');
-        const data = await res.json();
+        const data = await apiFetch('/api/aws/sqs/queues');
         const queues = data.queues || [];
 
         cardCount.innerText = `${queues.length} Queues`;
@@ -167,7 +172,8 @@
 
         select.innerHTML = queues.map(q => `<option value="${escapeHtml(q.name)}">${escapeHtml(q.name)}</option>`).join('');
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #fb7185; padding: 20px;">Error: ${err.message}</td></tr>`;
+        if (cardCount) cardCount.innerText = 'Unavailable';
+        tbody.innerHTML = errorRow(4, err.message);
       }
     }
 
@@ -180,18 +186,12 @@
       const name = document.getElementById('new-queue-name').value.trim();
       if (!name) return;
       try {
-        const res = await fetch('/api/aws/sqs/queues', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name })
-        });
-        if (res.ok) {
-          closeModal('modal-queue');
-          showToast(`Queue "${name}" created!`);
-          fetchSQSQueues();
-        }
+        await apiFetch('/api/aws/sqs/queues', jsonRequest('POST', { name }));
+        closeModal('modal-queue');
+        showToast(`Queue "${name}" created!`);
+        fetchSQSQueues();
       } catch (err) {
-        showToast(`Failed: ${err.message}`);
+        showToast(`Create queue failed: ${err.message}`);
       }
     }
 
@@ -200,15 +200,9 @@
       const body = document.getElementById('sqs-send-body').value.trim();
       if (!q || !body) return;
       try {
-        const res = await fetch('/api/aws/sqs/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ queue_name: q, message_body: body })
-        });
-        if (res.ok) {
-          showToast(`Message enqueued to ${q}!`);
-          fetchSQSQueues();
-        }
+        await apiFetch('/api/aws/sqs/messages', jsonRequest('POST', { queue_name: q, message_body: body }));
+        showToast(`Message enqueued to ${q}!`);
+        fetchSQSQueues();
       } catch (err) {
         showToast(`Send failed: ${err.message}`);
       }
@@ -216,8 +210,7 @@
 
     async function readSQSMessages(qName) {
       try {
-        const res = await fetch(`/api/aws/sqs/messages?queue_name=${encodeURIComponent(qName)}`);
-        const data = await res.json();
+        const data = await apiFetch(`/api/aws/sqs/messages?queue_name=${encodeURIComponent(qName)}`);
         const msgs = data.messages || [];
         if (msgs.length === 0) {
           alert(`Queue "${qName}" has no unread messages.`);
@@ -233,11 +226,9 @@
     async function purgeSQSQueue(qName) {
       if (!confirm(`Purge all messages in queue "${qName}"?`)) return;
       try {
-        const res = await fetch(`/api/aws/sqs/queues?queue_name=${encodeURIComponent(qName)}`, { method: 'DELETE' });
-        if (res.ok) {
-          showToast(`Queue "${qName}" purged.`);
-          fetchSQSQueues();
-        }
+        await apiFetch(`/api/aws/sqs/queues?queue_name=${encodeURIComponent(qName)}`, { method: 'DELETE' });
+        showToast(`Queue "${qName}" purged.`);
+        fetchSQSQueues();
       } catch (err) {
         showToast(`Purge failed: ${err.message}`);
       }
@@ -255,8 +246,7 @@
       const cardCount = document.getElementById('card-dynamo-count');
 
       try {
-        const res = await fetch('/api/aws/dynamodb/tables');
-        const data = await res.json();
+        const data = await apiFetch('/api/aws/dynamodb/tables');
         const tables = data.tables || [];
 
         cardCount.innerText = `${tables.length} Tables`;
@@ -289,7 +279,8 @@
           else if (btn.dataset.action === 'delete-dynamo-table') deleteDynamoTable(btn.dataset.name);
         };
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #fb7185; padding: 20px;">Error: ${err.message}</td></tr>`;
+        if (cardCount) cardCount.innerText = 'Unavailable';
+        tbody.innerHTML = errorRow(5, err.message);
       }
     }
 
@@ -304,34 +295,24 @@
       const keyName = document.getElementById('new-dynamo-key-name').value.trim() || 'id';
       if (!tableName) return;
       try {
-        const res = await fetch('/api/aws/dynamodb/tables', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ table_name: tableName, key_name: keyName })
-        });
-        if (res.ok) {
-          closeModal('modal-dynamo-table');
-          showToast(`DynamoDB table "${tableName}" created!`);
-          fetchDynamoTables();
-        } else {
-          showToast('Failed to create table');
-        }
+        await apiFetch('/api/aws/dynamodb/tables', jsonRequest('POST', { table_name: tableName, key_name: keyName }));
+        closeModal('modal-dynamo-table');
+        showToast(`DynamoDB table "${tableName}" created!`);
+        fetchDynamoTables();
       } catch (err) {
-        showToast(`Error: ${err.message}`);
+        showToast(`Create table failed: ${err.message}`);
       }
     }
 
     async function deleteDynamoTable(tName) {
       if (!confirm(`Permanently delete DynamoDB table "${tName}"?`)) return;
       try {
-        const res = await fetch(`/api/aws/dynamodb/tables?table_name=${encodeURIComponent(tName)}`, { method: 'DELETE' });
-        if (res.ok) {
-          showToast(`Table "${tName}" deleted.`);
-          if (activeDynamoTable === tName) {
-            document.getElementById('dynamo-items-container').style.display = 'none';
-          }
-          fetchDynamoTables();
+        await apiFetch(`/api/aws/dynamodb/tables?table_name=${encodeURIComponent(tName)}`, { method: 'DELETE' });
+        showToast(`Table "${tName}" deleted.`);
+        if (activeDynamoTable === tName) {
+          document.getElementById('dynamo-items-container').style.display = 'none';
         }
+        fetchDynamoTables();
       } catch (err) {
         showToast(`Delete failed: ${err.message}`);
       }
@@ -339,15 +320,9 @@
 
     async function createSampleDynamoTable() {
       try {
-        const res = await fetch('/api/aws/dynamodb/tables', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ table_name: 'products', key_name: 'id' })
-        });
-        if (res.ok) {
-          showToast('DynamoDB table "products" ready!');
-          fetchDynamoTables();
-        }
+        await apiFetch('/api/aws/dynamodb/tables', jsonRequest('POST', { table_name: 'products', key_name: 'id' }));
+        showToast('DynamoDB table "products" ready!');
+        fetchDynamoTables();
       } catch (err) {
         showToast(`Table creation failed: ${err.message}`);
       }
@@ -363,13 +338,11 @@
       tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 18px;">Scanning table...</td></tr>`;
 
       try {
-        const res = await fetch(`/api/aws/dynamodb/items?table_name=${encodeURIComponent(tName)}`);
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.detail || res.statusText);
+        const data = await apiFetch(`/api/aws/dynamodb/items?table_name=${encodeURIComponent(tName)}`);
         const items = data.items || [];
         currentDynamoItems = items;
 
-        document.getElementById('dynamo-items-json').innerText = items.length > 0 
+        document.getElementById('dynamo-items-json').innerText = items.length > 0
           ? JSON.stringify(items, null, 2)
           : '(Table is empty)';
 
@@ -406,7 +379,7 @@
           if (btn.dataset.action === 'delete-dynamo-item') deleteDynamoItem(btn.dataset.key);
         };
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #fb7185; padding: 18px;">Error: ${escapeHtml(err.message)}</td></tr>`;
+        tbody.innerHTML = errorRow(3, err.message, 18);
         document.getElementById('dynamo-items-json').innerText = `Error: ${err.message}`;
       }
     }
@@ -438,21 +411,12 @@
         return;
       }
       try {
-        const res = await fetch('/api/aws/dynamodb/items', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ table_name: activeDynamoTable, item: parsed })
-        });
-        if (res.ok) {
-          closeModal('modal-edit-dynamo-item');
-          showToast(`Item updated in ${activeDynamoTable}!`);
-          scanDynamoTable(activeDynamoTable, activeDynamoPartitionKey);
-        } else {
-          const errData = await res.json().catch(() => ({}));
-          showToast(`Update failed: ${errData.detail || res.statusText}`);
-        }
+        await apiFetch('/api/aws/dynamodb/items', jsonRequest('PUT', { table_name: activeDynamoTable, item: parsed }));
+        closeModal('modal-edit-dynamo-item');
+        showToast(`Item updated in ${activeDynamoTable}!`);
+        scanDynamoTable(activeDynamoTable, activeDynamoPartitionKey);
       } catch (err) {
-        showToast(`Update error: ${err.message}`);
+        showToast(`Update failed: ${err.message}`);
       }
     }
 
@@ -483,32 +447,21 @@
         return;
       }
       try {
-        const res = await fetch('/api/aws/dynamodb/items', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ table_name: activeDynamoTable, item: parsed })
-        });
-        if (res.ok) {
-          closeModal('modal-dynamo-item');
-          showToast(`Item inserted into ${activeDynamoTable}!`);
-          scanDynamoTable(activeDynamoTable, activeDynamoPartitionKey);
-        } else {
-          const errData = await res.json().catch(() => ({}));
-          showToast(`Insert failed: ${errData.detail || res.statusText}`);
-        }
+        await apiFetch('/api/aws/dynamodb/items', jsonRequest('POST', { table_name: activeDynamoTable, item: parsed }));
+        closeModal('modal-dynamo-item');
+        showToast(`Item inserted into ${activeDynamoTable}!`);
+        scanDynamoTable(activeDynamoTable, activeDynamoPartitionKey);
       } catch (err) {
-        showToast(`Insert error: ${err.message}`);
+        showToast(`Insert failed: ${err.message}`);
       }
     }
 
     async function deleteDynamoItem(keyVal) {
       if (!confirm(`Delete item with ${activeDynamoPartitionKey}="${keyVal}"?`)) return;
       try {
-        const res = await fetch(`/api/aws/dynamodb/items?table_name=${encodeURIComponent(activeDynamoTable)}&key_name=${encodeURIComponent(activeDynamoPartitionKey)}&key_value=${encodeURIComponent(keyVal)}`, { method: 'DELETE' });
-        if (res.ok) {
-          showToast('Item deleted.');
-          scanDynamoTable(activeDynamoTable, activeDynamoPartitionKey);
-        }
+        await apiFetch(`/api/aws/dynamodb/items?table_name=${encodeURIComponent(activeDynamoTable)}&key_name=${encodeURIComponent(activeDynamoPartitionKey)}&key_value=${encodeURIComponent(keyVal)}`, { method: 'DELETE' });
+        showToast('Item deleted.');
+        scanDynamoTable(activeDynamoTable, activeDynamoPartitionKey);
       } catch (err) {
         showToast(`Delete failed: ${err.message}`);
       }
@@ -524,15 +477,9 @@
       sample['created_at'] = new Date().toISOString();
 
       try {
-        const res = await fetch('/api/aws/dynamodb/items', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ table_name: activeDynamoTable, item: sample })
-        });
-        if (res.ok) {
-          showToast(`Inserted item into ${activeDynamoTable}!`);
-          scanDynamoTable(activeDynamoTable, activeDynamoPartitionKey);
-        }
+        await apiFetch('/api/aws/dynamodb/items', jsonRequest('POST', { table_name: activeDynamoTable, item: sample }));
+        showToast(`Inserted item into ${activeDynamoTable}!`);
+        scanDynamoTable(activeDynamoTable, activeDynamoPartitionKey);
       } catch (err) {
         showToast(`Insert failed: ${err.message}`);
       }
@@ -546,8 +493,7 @@
       const cardCount = document.getElementById('card-secrets-count');
 
       try {
-        const res = await fetch('/api/aws/secrets');
-        const data = await res.json();
+        const data = await apiFetch('/api/aws/secrets');
         const secrets = data.secrets || [];
 
         cardCount.innerText = `${secrets.length} Secrets`;
@@ -574,7 +520,8 @@
           if (btn.dataset.action === 'view-secret') viewSecretValue(btn.dataset.name);
         };
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #fb7185; padding: 20px;">Error: ${err.message}</td></tr>`;
+        if (cardCount) cardCount.innerText = 'Unavailable';
+        tbody.innerHTML = errorRow(3, err.message);
       }
     }
 
@@ -589,16 +536,10 @@
       const value = document.getElementById('new-secret-val').value.trim();
       if (!name || !value) return;
       try {
-        const res = await fetch('/api/aws/secrets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, value })
-        });
-        if (res.ok) {
-          closeModal('modal-secret');
-          showToast(`Secret "${name}" stored!`);
-          fetchSecrets();
-        }
+        await apiFetch('/api/aws/secrets', jsonRequest('POST', { name, value }));
+        closeModal('modal-secret');
+        showToast(`Secret "${name}" stored!`);
+        fetchSecrets();
       } catch (err) {
         showToast(`Save failed: ${err.message}`);
       }
@@ -606,13 +547,12 @@
 
     async function viewSecretValue(name) {
       try {
-        const res = await fetch(`/api/aws/secrets/${encodeURIComponent(name)}`);
-        const data = await res.json();
+        const data = await apiFetch(`/api/aws/secrets/${encodeURIComponent(name)}`);
         document.getElementById('view-secret-title').innerText = `Secret: ${name}`;
         document.getElementById('view-secret-body').innerText = data.value || '(Empty string)';
         document.getElementById('modal-view-secret').classList.add('active');
       } catch (err) {
-        showToast(`Fetch failed: ${err.message}`);
+        showToast(`Fetch secret failed: ${err.message}`);
       }
     }
 
@@ -626,8 +566,7 @@
       const tbody = document.getElementById('lambda-functions-tbody');
       const cardCount = document.getElementById('card-lambda-count');
       try {
-        const res = await fetch('/api/aws/lambda/functions');
-        const data = await res.json();
+        const data = await apiFetch('/api/aws/lambda/functions');
         const fns = data.functions || [];
         currentLambdaFunctions = fns;
         if (cardCount) cardCount.innerText = `${fns.length} Functions`;
@@ -662,13 +601,14 @@
           else if (btn.dataset.action === 'delete-lambda') deleteLambdaFunction(btn.dataset.name);
         };
       } catch (err) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #fb7185; padding: 20px;">Error: ${err.message}</td></tr>`;
+        if (cardCount) cardCount.innerText = 'Unavailable';
+        if (tbody) tbody.innerHTML = errorRow(6, err.message);
       }
     }
 
     function openCreateLambdaModal() {
       document.getElementById('new-lambda-name').value = '';
-      document.getElementById('new-lambda-code').value = 
+      document.getElementById('new-lambda-code').value =
 `def lambda_handler(event, context):
     name = event.get('name', 'World')
     return {
@@ -685,45 +625,29 @@
       if (!name || !code) return;
 
       try {
-        const res = await fetch('/api/aws/lambda/functions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, code })
-        });
-        if (res.ok) {
-          const data = await res.json().catch(() => ({}));
-          closeModal('modal-create-lambda');
-          showToast(`Lambda function "${name}" ${data.status === 'updated' ? 'updated' : 'deployed'}!`);
-          fetchLambdaFunctions();
-        } else {
-          const err = await res.json().catch(() => ({}));
-          showToast(`Deploy failed: ${err.detail || res.statusText}`);
-        }
+        const data = await apiFetch('/api/aws/lambda/functions', jsonRequest('POST', { name, code }));
+        closeModal('modal-create-lambda');
+        showToast(`Lambda function "${name}" ${data.status === 'updated' ? 'updated' : 'deployed'}!`);
+        fetchLambdaFunctions();
       } catch (err) {
-        showToast(`Deploy error: ${err.message}`);
+        showToast(`Deploy failed: ${err.message}`);
       }
     }
 
     async function deploySampleLambda() {
       try {
-        const res = await fetch('/api/aws/lambda/functions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: 'sample_calculator',
-            code: 
+        await apiFetch('/api/aws/lambda/functions', jsonRequest('POST', {
+          name: 'sample_calculator',
+          code:
 `def lambda_handler(event, context):
     a = float(event.get('a', 10))
     b = float(event.get('b', 5))
     op = event.get('op', 'add')
     result = (a + b) if op == 'add' else (a * b)
     return {'operation': op, 'a': a, 'b': b, 'result': result}`
-          })
-        });
-        if (res.ok) {
-          showToast('Sample Lambda "sample_calculator" deployed!');
-          fetchLambdaFunctions();
-        }
+        }));
+        showToast('Sample Lambda "sample_calculator" deployed!');
+        fetchLambdaFunctions();
       } catch (err) {
         showToast(`Deploy failed: ${err.message}`);
       }
@@ -739,6 +663,7 @@
 
     async function submitInvokeLambda() {
       if (!activeInvokeFnName) return;
+      const fnName = activeInvokeFnName;
       const rawPayload = document.getElementById('invoke-lambda-payload').value.trim();
       let parsed;
       try {
@@ -749,30 +674,27 @@
       }
 
       const submitBtn = document.getElementById('btn-invoke-submit');
+      const output = document.getElementById('invoke-result-output');
+      const resultBox = document.getElementById('invoke-result-box');
       submitBtn.innerText = 'Executing...';
       submitBtn.disabled = true;
 
       try {
-        const res = await fetch('/api/aws/lambda/invoke', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: activeInvokeFnName, payload: parsed })
-        });
-        const data = await res.json().catch(() => ({}));
-        const output = document.getElementById('invoke-result-output');
-        document.getElementById('invoke-result-box').style.display = 'block';
+        const data = await apiFetch('/api/aws/lambda/invoke', jsonRequest('POST', { name: fnName, payload: parsed }));
+        resultBox.style.display = 'block';
         output.innerText = JSON.stringify(data.result !== undefined ? data.result : data, null, 2);
         // executed === false means the handler raised; result holds the error payload.
-        const failed = !res.ok || data.executed === false;
+        const failed = data.executed === false;
         output.style.color = failed ? '#fb7185' : '#34d399';
-        if (!res.ok) {
-          showToast(`Invoke failed: ${data.detail || res.statusText}`);
-        } else if (data.executed === false) {
-          showToast(`${activeInvokeFnName} raised an error (${data.error || 'FunctionError'})`);
+        if (failed) {
+          showToast(`${fnName} raised an error (${data.error || 'FunctionError'})`);
         } else {
-          showToast(`Executed ${activeInvokeFnName}!`);
+          showToast(`Executed ${fnName}!`);
         }
       } catch (err) {
+        resultBox.style.display = 'block';
+        output.innerText = `Invoke failed: ${err.message}`;
+        output.style.color = '#fb7185';
         showToast(`Invoke failed: ${err.message}`);
       } finally {
         submitBtn.innerText = '🚀 Execute Function';
@@ -783,11 +705,9 @@
     async function deleteLambdaFunction(name) {
       if (!confirm(`Permanently delete Lambda function "${name}"?`)) return;
       try {
-        const res = await fetch(`/api/aws/lambda/functions?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
-        if (res.ok) {
-          showToast(`Lambda "${name}" deleted.`);
-          fetchLambdaFunctions();
-        }
+        await apiFetch(`/api/aws/lambda/functions?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
+        showToast(`Lambda "${name}" deleted.`);
+        fetchLambdaFunctions();
       } catch (err) {
         showToast(`Delete failed: ${err.message}`);
       }
@@ -800,8 +720,7 @@
       const tbody = document.getElementById('event-buses-tbody');
       const cardCount = document.getElementById('card-events-count');
       try {
-        const res = await fetch('/api/aws/events/buses');
-        const data = await res.json();
+        const data = await apiFetch('/api/aws/events/buses');
         const buses = data.buses || [];
         if (cardCount) cardCount.innerText = `${buses.length} Buses`;
 
@@ -825,15 +744,15 @@
 
         fetchEventRules();
       } catch (err) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #fb7185; padding: 20px;">Error: ${err.message}</td></tr>`;
+        if (cardCount) cardCount.innerText = 'Unavailable';
+        if (tbody) tbody.innerHTML = errorRow(3, err.message);
       }
     }
 
     async function fetchEventRules() {
       const tbody = document.getElementById('event-rules-tbody');
       try {
-        const res = await fetch('/api/aws/events/rules?event_bus=default');
-        const data = await res.json();
+        const data = await apiFetch('/api/aws/events/rules?event_bus=default');
         const rules = data.rules || [];
 
         if (!tbody) return;
@@ -851,7 +770,7 @@
           </tr>
         `).join('');
       } catch (err) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #fb7185; padding: 18px;">Error: ${err.message}</td></tr>`;
+        if (tbody) tbody.innerHTML = errorRow(4, err.message, 18);
       }
     }
 
@@ -872,20 +791,13 @@
       }
 
       try {
-        const res = await fetch('/api/aws/events/put-event', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ source, detail_type: detailType, detail, event_bus_name: 'default' })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          closeModal('modal-put-event');
-          showToast(`Event published (ID: ${data.event_id || 'sent'})!`);
-        } else {
-          showToast('Failed to publish event');
-        }
+        const data = await apiFetch('/api/aws/events/put-event', jsonRequest('POST', {
+          source, detail_type: detailType, detail, event_bus_name: 'default'
+        }));
+        closeModal('modal-put-event');
+        showToast(`Event published (ID: ${data.event_id || 'sent'})!`);
       } catch (err) {
-        showToast(`Publish error: ${err.message}`);
+        showToast(`Publish failed: ${err.message}`);
       }
     }
 
@@ -898,8 +810,7 @@
       const tbody = document.getElementById('kinesis-streams-tbody');
       const cardCount = document.getElementById('card-kinesis-count');
       try {
-        const res = await fetch('/api/aws/kinesis/streams');
-        const data = await res.json();
+        const data = await apiFetch('/api/aws/kinesis/streams');
         const streams = data.streams || [];
         if (cardCount) cardCount.innerText = `${streams.length} Streams`;
 
@@ -935,7 +846,8 @@
           else if (btn.dataset.action === 'delete-kinesis') deleteKinesisStream(btn.dataset.name);
         };
       } catch (err) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #fb7185; padding: 20px;">Error: ${err.message}</td></tr>`;
+        if (cardCount) cardCount.innerText = 'Unavailable';
+        if (tbody) tbody.innerHTML = errorRow(4, err.message);
       }
     }
 
@@ -951,36 +863,22 @@
       if (!name) return;
 
       try {
-        const res = await fetch('/api/aws/kinesis/streams', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stream_name: name, shard_count: shards })
-        });
-        if (res.ok) {
-          closeModal('modal-create-kinesis');
-          showToast(`Kinesis stream "${name}" created!`);
-          fetchKinesisStreams();
-        } else {
-          showToast('Failed to create stream');
-        }
+        await apiFetch('/api/aws/kinesis/streams', jsonRequest('POST', { stream_name: name, shard_count: shards }));
+        closeModal('modal-create-kinesis');
+        showToast(`Kinesis stream "${name}" created!`);
+        fetchKinesisStreams();
       } catch (err) {
-        showToast(`Create error: ${err.message}`);
+        showToast(`Create stream failed: ${err.message}`);
       }
     }
 
     async function createSampleKinesisStream() {
       try {
-        const res = await fetch('/api/aws/kinesis/streams', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stream_name: 'telemetry_stream', shard_count: 1 })
-        });
-        if (res.ok) {
-          showToast('Sample Kinesis stream "telemetry_stream" created!');
-          fetchKinesisStreams();
-        }
+        await apiFetch('/api/aws/kinesis/streams', jsonRequest('POST', { stream_name: 'telemetry_stream', shard_count: 1 }));
+        showToast('Sample Kinesis stream "telemetry_stream" created!');
+        fetchKinesisStreams();
       } catch (err) {
-        showToast(`Create failed: ${err.message}`);
+        showToast(`Create stream failed: ${err.message}`);
       }
     }
 
@@ -997,20 +895,14 @@
       if (!data) return;
 
       try {
-        const res = await fetch('/api/aws/kinesis/records', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stream_name: activeKinesisStream, partition_key: partKey, data })
-        });
-        if (res.ok) {
-          closeModal('modal-kinesis-put');
-          showToast(`Record put to ${activeKinesisStream}!`);
-          readKinesisRecords(activeKinesisStream);
-        } else {
-          showToast('Put record failed');
-        }
+        await apiFetch('/api/aws/kinesis/records', jsonRequest('POST', {
+          stream_name: activeKinesisStream, partition_key: partKey, data
+        }));
+        closeModal('modal-kinesis-put');
+        showToast(`Record put to ${activeKinesisStream}!`);
+        readKinesisRecords(activeKinesisStream);
       } catch (err) {
-        showToast(`Put error: ${err.message}`);
+        showToast(`Put record failed: ${err.message}`);
       }
     }
 
@@ -1023,8 +915,7 @@
       tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 18px;">Reading records from shard...</td></tr>`;
 
       try {
-        const res = await fetch(`/api/aws/kinesis/records?stream_name=${encodeURIComponent(streamName)}`);
-        const data = await res.json();
+        const data = await apiFetch(`/api/aws/kinesis/records?stream_name=${encodeURIComponent(streamName)}`);
         const records = data.records || [];
 
         if (records.length === 0) {
@@ -1041,21 +932,19 @@
           </tr>
         `).join('');
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #fb7185; padding: 18px;">Error: ${err.message}</td></tr>`;
+        tbody.innerHTML = errorRow(4, err.message, 18);
       }
     }
 
     async function deleteKinesisStream(name) {
       if (!confirm(`Permanently delete Kinesis stream "${name}"?`)) return;
       try {
-        const res = await fetch(`/api/aws/kinesis/streams?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
-        if (res.ok) {
-          showToast(`Stream "${name}" deleted.`);
-          if (activeKinesisStream === name) {
-            document.getElementById('kinesis-records-container').style.display = 'none';
-          }
-          fetchKinesisStreams();
+        await apiFetch(`/api/aws/kinesis/streams?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
+        showToast(`Stream "${name}" deleted.`);
+        if (activeKinesisStream === name) {
+          document.getElementById('kinesis-records-container').style.display = 'none';
         }
+        fetchKinesisStreams();
       } catch (err) {
         showToast(`Delete failed: ${err.message}`);
       }

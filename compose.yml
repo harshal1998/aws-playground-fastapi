@@ -12,7 +12,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
       POSTGRES_DB: ${POSTGRES_DB:-appdb}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -35,7 +35,7 @@ services:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@admin.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
     ports:
-      - "${PGADMIN_PORT:-5050}:80"
+      - "${BIND_ADDRESS:-127.0.0.1}:${PGADMIN_PORT:-5050}:80"
     volumes:
       - ./docker/pgadmin/servers.json:/pgadmin4/servers.json
     depends_on:
@@ -54,7 +54,7 @@ services:
     container_name: redis-cache
     restart: always
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${BIND_ADDRESS:-127.0.0.1}:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -75,7 +75,7 @@ services:
     environment:
       - REDIS_HOSTS=local:redis:6379
     ports:
-      - "${REDIS_COMMANDER_PORT:-8081}:8081"
+      - "${BIND_ADDRESS:-127.0.0.1}:${REDIS_COMMANDER_PORT:-8081}:8081"
     depends_on:
       - redis
     deploy:
@@ -92,8 +92,8 @@ services:
     container_name: mailpit-service
     restart: always
     ports:
-      - "${MAILPIT_SMTP_PORT:-1025}:1025"
-      - "${MAILPIT_UI_PORT:-8025}:8025"
+      - "${BIND_ADDRESS:-127.0.0.1}:${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${BIND_ADDRESS:-127.0.0.1}:${MAILPIT_UI_PORT:-8025}:8025"
     deploy:
       resources:
         limits:
@@ -108,7 +108,7 @@ services:
     container_name: localstack-service
     restart: always
     ports:
-      - "${LOCALSTACK_PORT:-4566}:4566"
+      - "${BIND_ADDRESS:-127.0.0.1}:${LOCALSTACK_PORT:-4566}:4566"
     environment:
       - SERVICES=s3,sqs,sns,dynamodb,secretsmanager,ssm,lambda,events,kinesis
       - DISABLE_CORS_CHECKS=1
@@ -127,7 +127,7 @@ services:
     container_name: s3-browser-ui
     restart: always
     ports:
-      - "${S3_BROWSER_PORT:-8085}:8000"
+      - "${BIND_ADDRESS:-127.0.0.1}:${S3_BROWSER_PORT:-8085}:8000"
     environment:
       - S3_ENDPOINT=http://localstack:4566
       - S3_PUBLIC_ENDPOINT=http://localhost:${LOCALSTACK_PORT:-4566}
@@ -160,7 +160,7 @@ services:
     container_name: prometheus-service
     restart: always
     ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
+      - "${BIND_ADDRESS:-127.0.0.1}:${PROMETHEUS_PORT:-9090}:9090"
     volumes:
       - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     deploy:
@@ -174,7 +174,7 @@ services:
     container_name: grafana-service
     restart: always
     ports:
-      - "${GRAFANA_PORT:-3000}:3000"
+      - "${BIND_ADDRESS:-127.0.0.1}:${GRAFANA_PORT:-3000}:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
@@ -198,7 +198,7 @@ services:
     image: aws-playground-fastapi-api:latest
     container_name: api-service
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "${BIND_ADDRESS:-127.0.0.1}:${API_PORT:-8000}:8000"
     volumes:
       - .:/app
     environment:
@@ -233,7 +233,7 @@ services:
     container_name: nginx-gateway
     restart: always
     ports:
-      - "${GATEWAY_PORT:-80}:80"
+      - "${BIND_ADDRESS:-127.0.0.1}:${GATEWAY_PORT:-80}:80"
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./docker/portal:/usr/share/nginx/html:ro
@@ -252,7 +252,7 @@ services:
     image: locustio/locust
     container_name: locust-service
     ports:
-      - "${LOCUST_PORT:-8089}:8089"
+      - "${BIND_ADDRESS:-127.0.0.1}:${LOCUST_PORT:-8089}:8089"
     volumes:
       - ./docker/locust:/mnt/locust
     command: -f /mnt/locust/locustfile.py --host http://api:8000

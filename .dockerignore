@@ -1,0 +1,24 @@
+# Secrets
+.env
+*.env.local
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# VCS, CI and tooling
+.git/
+.github/
+.claude/
+.pytest_cache/
+.ruff_cache/
+
+# Python build artefacts
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs and docs (not needed at runtime)
+*.log
+docs/

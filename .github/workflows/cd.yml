@@ -8,7 +8,13 @@ on:
 
 jobs:
   publish:
-    if: github.event.workflow_run.conclusion == 'success'
+    # `branches` above matches the head branch *name*, so a fork PR from a
+    # branch called `develop` would also qualify. Only publish pushes to
+    # this repository.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read

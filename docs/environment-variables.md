@@ -14,6 +14,7 @@ There are two layers of configuration in this repo, and they don't fully overlap
 
 | Variable | Default | Used by |
 | :--- | :--- | :--- |
+| `BIND_ADDRESS` | `127.0.0.1` | host interface for every published port; set `0.0.0.0` only on a trusted network |
 | `POSTGRES_USER` | `postgres` | `db`, `api`, `migration` |
 | `POSTGRES_PASSWORD` | *(placeholder — change it)* | `db`, `api`, `migration` |
 | `POSTGRES_DB` | `appdb` | `db`, `api`, `migration` |

@@ -13,7 +13,7 @@ patterns — not a real deployed service. It's a FastAPI app plus an 11-service 
 - **`main.py`** — FastAPI app with lifespan hooks: opens the Postgres pool, connects Redis,
   ensures the S3 bucket exists on startup; adds a Prometheus metrics middleware; exposes `/metrics`.
 - **`core/`** — thin infra wrappers:
-  - `database.py` — asyncpg pool with retry-loop connect + auto-creates `items` table.
+  - `database.py` — asyncpg pool with retry-loop connect (no DDL; tables come from Alembic).
   - `redis.py` — redis.asyncio client with retry.
   - `metrics.py` — request counter + latency histogram middleware.
   - `config.py` — a frozen dataclass `Settings` reading env vars (no pydantic-settings).
@@ -35,8 +35,8 @@ patterns — not a real deployed service. It's a FastAPI app plus an 11-service 
 - **`tests/test_api.py`** — integration tests (not unit tests) that hit a **live running stack**
   via `requests`, covering items CRUD/cache, S3, and every AWS service lifecycle (SQS, DynamoDB,
   EventBridge, Kinesis, Lambda).
-- **`alembic/`** — one migration (`001_create_items_table`), though `database.py` also creates the
-  table idempotently itself at startup (belt-and-suspenders/duplicated).
+- **`alembic/`** — one migration (`001_create_items_table`), the only place the `items` table
+  is created; the `api` container runs `alembic upgrade head` on every start.
 
 ## Infrastructure (`compose.yml`, `docker/`)
 

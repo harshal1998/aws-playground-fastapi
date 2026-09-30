@@ -30,21 +30,18 @@ simple string/int types, and avoids an extra dependency. It does mean:
 - No validation beyond Python's own type coercion (`int(os.getenv(...))` will raise a raw
   `ValueError` on a malformed value, not a friendly Pydantic validation error).
 
-## Dual `items` table creation (Alembic *and* `database.py`)
+## Schema is owned by Alembic only
 
-Both `app/alembic/versions/001_create_items_table.py` and
-`connect_to_database()` in `app/core/database.py` run the same
-`CREATE TABLE IF NOT EXISTS items (...)`. This looks redundant, and functionally it is for the
-current schema — but it serves two different audiences:
-- `database.py`'s inline DDL guarantees the API works out of the box even if someone forgets to
-  run `docker compose run --rm migration` — appropriate for a "playground" repo where quick
-  start matters more than migration discipline.
-- The Alembic migration exists so the **pattern** of doing schema changes through migrations is
-  demonstrated and available, per the project's stated goal of being a hands-on
-  learning/practice environment for production patterns (per `README.md`).
+The `items` table is created by `app/alembic/versions/001_create_items_table.py` and nothing
+else: `connect_to_database()` in `app/core/database.py` only opens the asyncpg pool and runs no
+DDL. The out-of-the-box experience comes from `compose.yml` instead — the `api` service's
+command runs `alembic upgrade head` before starting Uvicorn, so the schema is current on every
+container start.
 
-If you add a column to `items`, you must update **both** places, or accept that the Alembic
-migration becomes stale documentation. There is no automated check enforcing they stay in sync.
+If you add a column or table, write a new Alembic migration; there is no second copy of the DDL
+to keep in sync. When running the API outside the `api` container (`dev.ps1 run`, bare
+`uvicorn`), apply migrations first with `docker compose run --rm migration` (or
+`.\dev.ps1 migrate`).
 
 ## Broad `except Exception` in `AWSService` list operations
 

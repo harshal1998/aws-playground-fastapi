@@ -69,12 +69,12 @@ against `API_URL` (default `http://localhost:8000`). There's no mocking layer, s
 (`docker compose up -d`) must already be running, and running `pytest` directly on the host works
 identically to `docker compose run --rm test` as long as the API is reachable at `API_URL`.
 
-## Alembic migration vs. auto-create at startup
+## `relation "items" does not exist`
 
-`app/core/database.py`'s `connect_to_database()` runs a `CREATE TABLE IF NOT EXISTS items ...`
-on every startup, independent of Alembic. The Alembic migration
-(`001_create_items_table.py`) does the same thing. This means `docker compose run --rm migration`
-is not strictly required for the `items` table to exist — but any *future* migration (a new
-column, a new table) must still go through Alembic, since the auto-create logic in
-`database.py` isn't kept in sync with the schema automatically. See
-[Architecture Notes](architecture-notes.md) for more on this duplication.
+Tables are created only by Alembic migrations (`alembic upgrade head`);
+`app/core/database.py` just opens the connection pool and never creates tables. The `api`
+container runs `alembic upgrade head` on every start (see its `command` in `compose.yml`), so
+this error normally means the API is running *outside* that container (`dev.ps1 run`, bare
+`uvicorn`, or an overridden command) against a database that was never migrated. Run
+`docker compose run --rm migration` (or `.\dev.ps1 migrate`) and retry. See
+[Architecture Notes](architecture-notes.md#schema-is-owned-by-alembic-only).

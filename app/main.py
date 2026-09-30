@@ -39,6 +39,12 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     description=settings.PROJECT_DESCRIPTION,
     lifespan=lifespan,
+    # nginx serves the API under /api (stripping the prefix). root_path only
+    # changes generated URLs: /docs loads /api/openapi.json and its
+    # "Try it out" calls /api/..., so both work through http://localhost/docs.
+    # Routing is unaffected: /items still matches, and on :8000 a /api/...
+    # path is served too, since Starlette strips a leading root_path.
+    root_path="/api",
 )
 
 # Map boto3/botocore errors to HTTP statuses (404/400/409/429/502/503)

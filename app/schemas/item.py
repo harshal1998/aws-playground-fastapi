@@ -1,6 +1,6 @@
-from typing import List
+from typing import Annotated, List
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 # Largest value NUMERIC(10, 2) can hold; anything above overflows in Postgres
 MAX_PRICE = 99_999_999.99
@@ -18,7 +18,13 @@ class ItemBase(BaseModel):
 
 
 class ItemCreate(ItemBase):
-    pass
+    # Input-only: strip surrounding whitespace and require a non-empty name.
+    # Kept off ItemBase because ItemResponse inherits it, and rows created
+    # before this check may already hold empty names; reading them back
+    # must not fail response validation.
+    name: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
+    ]
 
 
 class ItemResponse(ItemBase):

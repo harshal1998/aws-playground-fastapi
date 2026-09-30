@@ -21,6 +21,30 @@ def test_create_item_accepts_name_of_exactly_100_chars():
     assert response.json()["item"]["name"] == payload["name"]
 
 
+def test_create_item_rejects_empty_or_blank_name():
+    """Empty and whitespace-only names must be rejected with 422."""
+    for bad_name in ("", "   ", "\t\n"):
+        payload = {"name": bad_name, "price": 10.0, "is_offer": False}
+        response = requests.post(f"{API_URL}/items", json=payload, timeout=10)
+        assert response.status_code == 422, repr(bad_name)
+
+
+def test_create_item_accepts_single_char_name():
+    """A 1-char name is the lower bound and must still be accepted."""
+    payload = {"name": "k", "price": 10.0, "is_offer": False}
+    response = requests.post(f"{API_URL}/items", json=payload, timeout=10)
+    assert response.status_code == 201
+    assert response.json()["item"]["name"] == "k"
+
+
+def test_create_item_strips_surrounding_whitespace_from_name():
+    """Surrounding whitespace is stripped before the name is stored."""
+    payload = {"name": "  Padded Name  ", "price": 10.0, "is_offer": False}
+    response = requests.post(f"{API_URL}/items", json=payload, timeout=10)
+    assert response.status_code == 201
+    assert response.json()["item"]["name"] == "Padded Name"
+
+
 def test_create_item_rejects_price_overflowing_numeric_10_2():
     """Prices that overflow NUMERIC(10, 2) must be rejected with 422."""
     for bad_price in (100000000, 1e8, 1e12):

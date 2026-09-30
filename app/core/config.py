@@ -34,6 +34,8 @@ class Settings:
     AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "test")
     AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
     S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "fastapi-bucket")
+    # Keep in sync with client_max_body_size in docker/nginx/nginx.conf.
+    S3_MAX_UPLOAD_BYTES: int = int(os.getenv("S3_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
 
 
 settings = Settings()

@@ -20,7 +20,7 @@ There are two layers of configuration in this repo, and they don't fully overlap
 | `POSTGRES_DB` | `appdb` | `db`, `api`, `migration` |
 | `POSTGRES_PORT` | `5432` | host port mapping for `db` |
 | `API_PORT` | `8000` | host port mapping for `api` |
-| `DATABASE_URL` | built from the Postgres vars above | overridable full DSN for `api` |
+| `DATABASE_URL` | built from the Postgres vars above | overridable full DSN for `api`; also the only DB URL Alembic uses (required, no `alembic.ini` fallback). Use the plain `postgresql://` scheme — asyncpg needs it, and `app/alembic/env.py` rewrites it to `postgresql+psycopg://` |
 | `LOCUST_PORT` | `8089` | host port mapping for `locust` |
 | `PGADMIN_DEFAULT_EMAIL` | `admin@admin.com` | `pgadmin` login |
 | `PGADMIN_DEFAULT_PASSWORD` | *(placeholder — change it)* | `pgadmin` login |

@@ -1,0 +1,17 @@
+# Direct runtime dependencies of the API image. requirements.txt is the lock
+# generated from this file (it pins every transitive dependency too) and is
+# what the Dockerfile installs. After editing this file, regenerate the lock
+# (Git Bash / Linux / macOS):
+#   docker run --rm -v "$PWD:/src" -w /src python:3.11-slim sh -c \
+#     "pip install -q uv && uv pip compile --universal --python-version 3.11 \
+#      requirements.in -o requirements.txt"
+alembic==1.14.1
+asyncpg==0.29.0
+boto3==1.36.21
+fastapi==0.141.1
+prometheus-client==0.20.0
+psycopg[binary]==3.2.4
+pydantic==2.13.5
+redis==5.2.1
+SQLAlchemy==2.1.1
+uvicorn==0.54.0

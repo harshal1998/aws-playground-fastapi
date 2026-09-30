@@ -195,6 +195,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      target: runtime
     image: aws-playground-fastapi-api:latest
     container_name: api-service
     restart: unless-stopped
@@ -273,7 +274,10 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    image: aws-playground-fastapi-api:latest
+      # The `test` stage adds pytest/requests (requirements-dev.txt) on top
+      # of the runtime deps; the api image itself ships without them.
+      target: test
+    image: aws-playground-fastapi-test:latest
     container_name: test-runner
     command: pytest -v app/tests/
     volumes:
@@ -295,6 +299,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      target: runtime
     image: aws-playground-fastapi-api:latest
     container_name: migration-runner
     command: alembic upgrade head

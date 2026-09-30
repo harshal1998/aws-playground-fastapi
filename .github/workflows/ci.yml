@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install ruff
+      - name: Install dev tooling
         run: pip install -r requirements-dev.txt
 
       - name: Run ruff
@@ -30,15 +30,34 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Keeps the default GHA cache scope, which cd.yml also reads when it
+      # builds the same runtime target for GHCR.
       - name: Build api image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
+          target: runtime
           tags: aws-playground-fastapi-api:latest
           load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Test image = runtime deps + requirements-dev.txt, used by the compose
+      # `test` service. Its own cache scope stops the two builds overwriting
+      # each other's cache; it also reads the api scope for the shared base.
+      - name: Build test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: test
+          tags: aws-playground-fastapi-test:latest
+          load: true
+          cache-from: |
+            type=gha
+            type=gha,scope=test
+          cache-to: type=gha,scope=test,mode=max
 
       - name: Start backing services and API
         run: docker compose up -d --wait db redis localstack mailpit api

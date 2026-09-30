@@ -1,0 +1,12 @@
+# Development / test tooling (lint, integration tests, load test script).
+# Not installed in the runtime image. requirements-dev.txt is the lock
+# generated from this file; it is constrained to the runtime lock so shared
+# transitive deps (e.g. urllib3) resolve to the same versions. Regenerate it
+# after requirements.txt (Git Bash / Linux / macOS):
+#   docker run --rm -v "$PWD:/src" -w /src python:3.11-slim sh -c \
+#     "pip install -q uv && uv pip compile --universal --python-version 3.11 \
+#      requirements-dev.in -o requirements-dev.txt"
+-c requirements.txt
+pytest==9.1.1
+requests==2.34.2
+ruff==0.16.9

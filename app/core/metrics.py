@@ -25,12 +25,32 @@ REQUEST_LATENCY = Histogram(
     ["endpoint"],
 )
 
+# Fixed endpoint label for requests that matched no route (404s)
+UNMATCHED_ENDPOINT = "unmatched"
+
+
+def _route_template(request: Request) -> str:
+    """Returns the matched route template (e.g. "/items/{item_id}").
+
+    Labelling by template instead of the raw path keeps per-ID URLs and 404
+    probes from creating an unbounded number of series. Must be called after
+    call_next, once the router has populated the scope.
+    """
+    route = request.scope.get("route")
+    if route is None:
+        return UNMATCHED_ENDPOINT
+    # FastAPI keeps included routers nested, so scope["route"] holds the
+    # template relative to the router prefix ("/{item_id}"). The full
+    # template lives on FastAPI's effective route context; fall back to the
+    # route's own path if that internal ever changes (still bounded).
+    context = request.scope.get("fastapi", {}).get("effective_route_context")
+    return getattr(context, "path_format", None) or getattr(route, "path", None) or UNMATCHED_ENDPOINT
+
 
 class PrometheusMetricsMiddleware(BaseHTTPMiddleware):
     """Tracks latency and HTTP status codes for incoming requests into Prometheus."""
 
     async def dispatch(self, request: Request, call_next):
-        endpoint = request.url.path
         start_time = time.time()
         status = 500
         try:
@@ -39,6 +59,7 @@ class PrometheusMetricsMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             duration = time.time() - start_time
+            endpoint = _route_template(request)
             REQUEST_COUNT.labels(
                 method=request.method, endpoint=endpoint, status=status
             ).inc()

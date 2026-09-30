@@ -691,8 +691,9 @@
           body: JSON.stringify({ name, code })
         });
         if (res.ok) {
+          const data = await res.json().catch(() => ({}));
           closeModal('modal-create-lambda');
-          showToast(`Lambda function "${name}" deployed!`);
+          showToast(`Lambda function "${name}" ${data.status === 'updated' ? 'updated' : 'deployed'}!`);
           fetchLambdaFunctions();
         } else {
           const err = await res.json().catch(() => ({}));
@@ -757,10 +758,20 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: activeInvokeFnName, payload: parsed })
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        const output = document.getElementById('invoke-result-output');
         document.getElementById('invoke-result-box').style.display = 'block';
-        document.getElementById('invoke-result-output').innerText = JSON.stringify(data.result !== undefined ? data.result : data, null, 2);
-        showToast(`Executed ${activeInvokeFnName}!`);
+        output.innerText = JSON.stringify(data.result !== undefined ? data.result : data, null, 2);
+        // executed === false means the handler raised; result holds the error payload.
+        const failed = !res.ok || data.executed === false;
+        output.style.color = failed ? '#fb7185' : '#34d399';
+        if (!res.ok) {
+          showToast(`Invoke failed: ${data.detail || res.statusText}`);
+        } else if (data.executed === false) {
+          showToast(`${activeInvokeFnName} raised an error (${data.error || 'FunctionError'})`);
+        } else {
+          showToast(`Executed ${activeInvokeFnName}!`);
+        }
       } catch (err) {
         showToast(`Invoke failed: ${err.message}`);
       } finally {

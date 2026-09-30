@@ -1,8 +1,82 @@
 import os
+import time
 
 import requests
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
+
+# Deploys wait (bounded) for the function to become Active/Updated, so they
+# can take longer than a plain request on a cold LocalStack.
+LAMBDA_DEPLOY_TIMEOUT = 60
+LAMBDA_INVOKE_TIMEOUT = 30
+
+
+def _deploy_lambda(name: str, code: str) -> requests.Response:
+    return requests.post(
+        f"{API_URL}/aws/lambda/functions",
+        json={"name": name, "code": code},
+        timeout=LAMBDA_DEPLOY_TIMEOUT,
+    )
+
+
+def _invoke_lambda(name: str, payload: dict) -> requests.Response:
+    """Invokes a function, retrying briefly while LocalStack cold-starts it."""
+    for attempt in range(5):
+        res = requests.post(
+            f"{API_URL}/aws/lambda/invoke",
+            json={"name": name, "payload": payload},
+            timeout=LAMBDA_INVOKE_TIMEOUT,
+        )
+        if res.status_code == 200 or attempt == 4:
+            return res
+        time.sleep(2)
+    return res
+
+
+def test_aws_lambda_handler_error_reports_failure():
+    """Verify an invoke whose handler raises returns executed=false with the error payload."""
+    fn_name = "pytest_raising_fn"
+    deploy_res = _deploy_lambda(
+        fn_name,
+        "def lambda_handler(event, context):\n    raise ValueError('boom from pytest')\n",
+    )
+    assert deploy_res.status_code == 200, deploy_res.text
+
+    invoke_res = _invoke_lambda(fn_name, {"x": 1})
+    assert invoke_res.status_code == 200, invoke_res.text
+    data = invoke_res.json()
+    assert data["executed"] is False
+    assert data["error"]
+    assert "boom from pytest" in data["result"]["errorMessage"]
+    assert data["result"]["errorType"] == "ValueError"
+
+    requests.delete(f"{API_URL}/aws/lambda/functions", params={"name": fn_name}, timeout=30)
+
+
+def test_aws_lambda_redeploy_updates_code_in_place():
+    """Verify redeploying an existing function updates its code and keeps its ARN."""
+    fn_name = "pytest_redeploy_fn"
+    requests.delete(f"{API_URL}/aws/lambda/functions", params={"name": fn_name}, timeout=30)
+
+    first = _deploy_lambda(fn_name, "def lambda_handler(event, context):\n    return {'version': 1}\n")
+    assert first.status_code == 200, first.text
+    assert first.json()["status"] == "created"
+
+    res_v1 = _invoke_lambda(fn_name, {})
+    assert res_v1.status_code == 200, res_v1.text
+    assert res_v1.json()["result"] == {"version": 1}
+
+    second = _deploy_lambda(fn_name, "def lambda_handler(event, context):\n    return {'version': 2}\n")
+    assert second.status_code == 200, second.text
+    assert second.json()["status"] == "updated"
+    assert second.json()["arn"] == first.json()["arn"]
+
+    res_v2 = _invoke_lambda(fn_name, {})
+    assert res_v2.status_code == 200, res_v2.text
+    assert res_v2.json()["executed"] is True
+    assert res_v2.json()["result"] == {"version": 2}
+
+    requests.delete(f"{API_URL}/aws/lambda/functions", params={"name": fn_name}, timeout=30)
 
 
 def test_aws_dynamodb_native_types_round_trip():

@@ -14,6 +14,9 @@ CACHE_ERRORS = (aioredis.RedisError, OSError)
 
 CACHE_TTL_SECONDS = 60
 
+# Generation counter for the items-list cache (see _items_generation).
+ITEMS_GEN_KEY = "items:gen"
+
 
 async def _cache_get(redis_client: aioredis.Redis | None, key: str) -> str | None:
     """Reads a cache key, returning None on a miss or if Redis is unavailable."""
@@ -36,15 +39,31 @@ async def _cache_set(redis_client: aioredis.Redis | None, key: str, value: dict)
         logger.warning("Redis cache write failed for %s: %s", key, e)
 
 
+async def _items_generation(redis_client: aioredis.Redis | None) -> str | None:
+    """Returns the current items-list cache generation, or None to bypass the cache.
+
+    List cache keys embed this counter, so bumping it on a write makes every
+    older list entry unreachable at once (they then expire via their TTL)
+    without scanning the keyspace.
+    """
+    if not redis_client:
+        return None
+    try:
+        return await redis_client.get(ITEMS_GEN_KEY) or "0"
+    except CACHE_ERRORS as e:
+        logger.warning("Redis read of %s failed, bypassing the items cache: %s", ITEMS_GEN_KEY, e)
+        return None
+
+
 async def _cache_invalidate_items(redis_client: aioredis.Redis | None) -> None:
-    """Drops all cached item entries, ignoring Redis failures."""
+    """Invalidates cached item lists by bumping the generation, ignoring Redis failures.
+
+    Per-item item:{id} entries are left alone: a create never makes them stale.
+    """
     if not redis_client:
         return
     try:
-        keys = [key async for key in redis_client.scan_iter(match="items:*")]
-        keys += [key async for key in redis_client.scan_iter(match="item:*")]
-        if keys:
-            await redis_client.delete(*keys)
+        await redis_client.incr(ITEMS_GEN_KEY)
     except CACHE_ERRORS as e:
         logger.warning("Redis cache invalidation failed: %s", e)
 
@@ -83,9 +102,12 @@ async def get_items(
     limit: int = 10,
 ) -> dict:
     """Retrieves items using Redis Cache-Aside pattern falling back to PostgreSQL."""
-    cache_key = f"items:limit:{limit}"
+    generation = await _items_generation(redis_client)
+    # generation is None when Redis is unavailable: read straight from PostgreSQL.
+    cache_key = f"items:gen:{generation}:limit:{limit}"
+    cache_client = redis_client if generation is not None else None
 
-    cached_data = await _cache_get(redis_client, cache_key)
+    cached_data = await _cache_get(cache_client, cache_key)
     if cached_data:
         data = json.loads(cached_data)
         return {
@@ -119,7 +141,7 @@ async def get_items(
 
         result = {"count": len(items), "items": items}
 
-        await _cache_set(redis_client, cache_key, result)
+        await _cache_set(cache_client, cache_key, result)
 
         return {
             "source": "database (PostgreSQL)",

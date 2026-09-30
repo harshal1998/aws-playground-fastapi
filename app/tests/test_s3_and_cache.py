@@ -49,6 +49,9 @@ class FailingRedis:
     async def delete(self, *args, **kwargs):
         self._fail()
 
+    async def incr(self, *args, **kwargs):
+        self._fail()
+
     async def scan_iter(self, *args, **kwargs):
         self._fail()
         yield  # pragma: no cover - makes this an async generator

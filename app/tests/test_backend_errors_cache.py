@@ -7,9 +7,11 @@ outage cases can't stop the shared container mid-suite, so they drive the app
 in-process through a minimal ASGI call with a stubbed boto3 client.
 """
 import asyncio
+import datetime
 import json
 import os
 import uuid
+from decimal import Decimal
 
 import requests
 from botocore.exceptions import (
@@ -21,6 +23,8 @@ from botocore.exceptions import (
 )
 
 from app.api.errors import status_for_botocore_error, status_for_client_error
+from app.schemas.item import ItemCreate
+from app.services import items as items_service
 from app.services.aws import AWSService, get_aws_service
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
@@ -238,3 +242,106 @@ def test_sqs_queue_round_trip_still_works():
     assert any(m["body"] == "payload" for m in received.json()["messages"])
     purged = requests.delete(f"{API_URL}/aws/sqs/queues", params={"queue_name": queue}, timeout=TIMEOUT)
     assert purged.status_code == 200, purged.text
+
+
+# ------------------------------------------------------------------------------
+# Items cache: generation counter instead of SCAN + DEL
+# ------------------------------------------------------------------------------
+
+
+class _MemoryRedis:
+    """In-memory stand-in for the async Redis client that records calls."""
+
+    def __init__(self):
+        self.data: dict[str, str] = {}
+
+    async def get(self, key):
+        return self.data.get(key)
+
+    async def setex(self, key, ttl, value):
+        self.data[key] = value
+
+    async def incr(self, key):
+        self.data[key] = str(int(self.data.get(key, "0")) + 1)
+        return int(self.data[key])
+
+    def __getattr__(self, name):
+        # scan_iter, delete, keys, ... must never be used by the items cache
+        raise AssertionError(f"unexpected Redis call: {name}")
+
+
+class _RowsConn:
+    def __init__(self, rows):
+        self.rows = rows
+
+    async def fetchrow(self, *args):
+        return self.rows[0]
+
+    async def fetch(self, *args):
+        return list(self.rows)
+
+
+class _RowsAcquire:
+    def __init__(self, conn):
+        self.conn = conn
+
+    async def __aenter__(self):
+        return self.conn
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _RowsPool:
+    def __init__(self, rows):
+        self.conn = _RowsConn(rows)
+
+    def acquire(self):
+        return _RowsAcquire(self.conn)
+
+
+def _row(item_id: int, name: str) -> dict:
+    return {
+        "id": item_id,
+        "name": name,
+        "price": Decimal("1.50"),
+        "is_offer": False,
+        "created_at": datetime.datetime(2026, 1, 1),
+    }
+
+
+def test_create_item_bumps_generation_without_scanning():
+    """Verify a create INCRs items:gen, never SCANs/DELs, and keeps item:{id} entries."""
+    redis = _MemoryRedis()
+    redis.data["item:1"] = json.dumps({"id": 1})
+    pool = _RowsPool([_row(1, "first")])
+
+    first = asyncio.run(items_service.get_items(pool, redis, limit=5))
+    assert first["source"] == "database (PostgreSQL)"
+    assert "items:gen:0:limit:5" in redis.data
+    assert asyncio.run(items_service.get_items(pool, redis, limit=5))["source"] == "cache (Redis)"
+
+    pool.conn.rows.insert(0, _row(2, "second"))
+    asyncio.run(items_service.create_item(pool.conn, redis, ItemCreate(name="second", price=1.5)))
+
+    assert redis.data[items_service.ITEMS_GEN_KEY] == "1"
+    assert "item:1" in redis.data  # per-item entries survive a create
+    after = asyncio.run(items_service.get_items(pool, redis, limit=5))
+    assert after["source"] == "database (PostgreSQL)"
+    assert [it["name"] for it in after["items"]] == ["second", "first"]
+
+
+def test_created_item_shows_up_in_cached_list():
+    """Verify GET /items reflects a new item even when the list was just cached."""
+    params = {"limit": 100}
+    requests.get(f"{API_URL}/items", params=params, timeout=TIMEOUT)
+    cached = requests.get(f"{API_URL}/items", params=params, timeout=TIMEOUT)
+    assert cached.status_code == 200
+
+    name = _name("gen-cache-item")
+    created = requests.post(f"{API_URL}/items", json={"name": name, "price": 2.5}, timeout=TIMEOUT)
+    assert created.status_code == 201, created.text
+
+    after = requests.get(f"{API_URL}/items", params=params, timeout=TIMEOUT)
+    assert after.status_code == 200
+    assert name in [it["name"] for it in after.json()["items"]]

@@ -206,11 +206,11 @@ If you want to run the FastAPI app directly on your host machine (outside Docker
 
 ### Cache-Aside Pattern (Redis)
 * When calling `GET /items`:
-  * If the key `items:limit:{limit}` exists in Redis, data is served from **cache** (`"source": "cache (Redis)"`).
+  * If the key `items:gen:{gen}:limit:{limit}` (current generation from `items:gen`) exists in Redis, data is served from **cache** (`"source": "cache (Redis)"`).
   * If not, it is fetched from **PostgreSQL**, saved to Redis with a 60-second TTL, and returned (`"source": "database (PostgreSQL)"`).
 * When calling `POST /items`:
   * The new item is saved to PostgreSQL.
-  * All `items:*` keys in Redis are automatically **invalidated** to prevent stale reads.
+  * Cached lists are **invalidated** by bumping the `items:gen` counter (`INCR`, no key scan), so the next read misses and refetches.
 
 ### Background Email Notifications (Mailpit)
 When creating an item (`POST /items`), FastAPI schedules a non-blocking `BackgroundTask` to deliver an SMTP notification to Mailpit.

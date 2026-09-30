@@ -55,7 +55,8 @@ commands, e.g. `test` → `docker compose run --rm test`).
 
 ## Redis cache looks stale / `GET /items` won't reflect a new item
 
-`items_service.create_item` invalidates cache by running `KEYS items:*` and deleting matches. If
+`items_service.create_item` invalidates cached lists by running `INCR items:gen`; list keys embed
+that generation (`items:gen:{gen}:limit:{limit}`), so older entries are simply never read again. If
 Redis is unreachable at write time, `redis_client` is falsy and the invalidation is silently
 skipped (by design — the app treats Redis as optional, degrading to direct-DB reads). If you added
 an item and still see a stale cached list, check `redis_client` connectivity rather than assuming

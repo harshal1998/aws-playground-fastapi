@@ -23,7 +23,8 @@ patterns — not a real deployed service. It's a FastAPI app plus an 11-service 
   - `v1/router.py` — wires up `root`, `items`, `s3`, `aws` sub-routers.
 - **`services/`**:
   - `items.py` — plain functions implementing **cache-aside** against Redis (60s TTL) with
-    Postgres fallback; cache invalidation on write via `KEYS items:*` + `DELETE`.
+    Postgres fallback; list keys embed a generation counter (`items:gen:{gen}:limit:{limit}`) and a
+    create invalidates them with a single `INCR items:gen` (no key scan; stale keys expire via TTL).
   - `s3.py` — class-based `S3Service` (singleton via `get_s3_service()`), boto3 client pointed at
     LocalStack, bucket ensure/list/get/put/delete.
   - `aws.py` — larger class-based `AWSService` wrapping SQS, DynamoDB, Secrets Manager, Lambda

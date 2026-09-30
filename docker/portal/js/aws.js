@@ -29,7 +29,7 @@
 
           if (data.active_services && data.active_services.length > 0) {
             tagsContainer.innerHTML = data.active_services
-              .map(s => `<span class="aws-tag">${s}</span>`)
+              .map(s => `<span class="aws-tag">${escapeHtml(s)}</span>`)
               .join(' ');
           }
         } else {

@@ -1,11 +1,16 @@
 import asyncio
 import datetime
+import os
 from decimal import Decimal
+from urllib.parse import quote
 
 import redis.asyncio as aioredis
+import requests
 
 from app.schemas.item import ItemCreate
 from app.services import items as items_service
+
+API_URL = os.getenv("API_URL", "http://localhost:8000")
 
 # ------------------------------------------------------------------------------
 # Redis outage: the items cache must be best-effort
@@ -85,3 +90,56 @@ def test_create_item_succeeds_when_cache_invalidation_fails():
     result = asyncio.run(items_service.create_item(StubConn(), FailingRedis(), item))
     assert result["id"] == 1
     assert result["name"] == ROW["name"]
+
+
+# ------------------------------------------------------------------------------
+# S3 downloads: served as attachments, never rendered inline
+# ------------------------------------------------------------------------------
+
+
+def _upload(key: str, content: bytes, content_type: str = "application/octet-stream") -> requests.Response:
+    return requests.post(
+        f"{API_URL}/s3/upload",
+        params={"filename": key},
+        data=content,
+        headers={"Content-Type": content_type},
+        timeout=10,
+    )
+
+
+def _delete(key: str) -> None:
+    requests.delete(f"{API_URL}/s3/file", params={"key": key}, timeout=10)
+
+
+def test_s3_download_is_attachment_with_nosniff():
+    """Verify an uploaded HTML file is downloaded, not rendered on the portal origin."""
+    key = "regression_xss.html"
+    assert _upload(key, b"<script>alert(1)</script>", "text/html").status_code == 200
+    try:
+        response = requests.get(f"{API_URL}/s3/file", params={"key": key}, timeout=10)
+        assert response.status_code == 200
+        assert response.headers["Content-Disposition"].startswith("attachment;")
+        assert 'filename="regression_xss.html"' in response.headers["Content-Disposition"]
+        assert response.headers["X-Content-Type-Options"] == "nosniff"
+        assert response.content == b"<script>alert(1)</script>"
+    finally:
+        _delete(key)
+
+
+def test_s3_download_key_with_quotes_and_unicode():
+    """Verify keys with quotes or non-Latin-1 characters get a valid header instead of a 500."""
+    for key in ('résumé "v2".txt', "файл.txt"):
+        assert _upload(key, b"hello").status_code == 200
+        try:
+            response = requests.get(f"{API_URL}/s3/file", params={"key": key}, timeout=10)
+            assert response.status_code == 200
+            disposition = response.headers["Content-Disposition"]
+            assert disposition.startswith("attachment;")
+            assert f"filename*=UTF-8''{quote(key, safe='')}" in disposition
+            # The ASCII fallback must not contain a raw quote that ends it early.
+            fallback = disposition.split('filename="', 1)[1].split('"', 1)[0]
+            assert fallback.isascii()
+            assert fallback.endswith(".txt")
+            assert response.content == b"hello"
+        finally:
+            _delete(key)

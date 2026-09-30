@@ -2,6 +2,7 @@
 S3 Storage Integration for LocalStack/AWS.
 Provides a class-based S3Service managing buckets and object storage.
 """
+import logging
 import socket
 import threading
 
@@ -10,6 +11,8 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from app.core.boto import BOTO_CLIENT_CONFIG
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class S3Service:
@@ -46,7 +49,9 @@ class S3Service:
         """Creates the bucket (an existing one is fine) and marks it ready; raises on failure."""
         try:
             self.client.create_bucket(Bucket=self.bucket_name)
-            print(f"Successfully initialized LocalStack S3 bucket: {self.bucket_name}")
+            # LocalStack answers 200 for a bucket we already own, so this
+            # also logs on restarts: "ready", not "created".
+            logger.info("S3 bucket %s is ready", self.bucket_name)
         except ClientError as e:
             code = e.response.get("Error", {}).get("Code", "")
             if code not in ("BucketAlreadyOwnedByYou", "BucketAlreadyExists"):
@@ -62,11 +67,11 @@ class S3Service:
         try:
             self._create_bucket()
         except ClientError as e:
-            print(f"Notice during S3 bucket initialization: {e}")
+            logger.warning("S3 bucket %s not initialized at startup: %s", self.bucket_name, e)
         except (BotoCoreError, OSError) as e:
             # EndpointConnectionError and botocore timeouts derive from
             # BotoCoreError, not OSError; never let them crash startup.
-            print(f"LocalStack S3 connection skipped (service may be offline): {e}")
+            logger.warning("S3 bucket %s not initialized, LocalStack may be offline: %s", self.bucket_name, e)
 
     def _require_bucket(self) -> None:
         """Creates the bucket once, lazily, if startup could not; errors propagate."""

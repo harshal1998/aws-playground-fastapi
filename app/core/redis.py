@@ -1,8 +1,11 @@
 import asyncio
+import logging
 
 import redis.asyncio as aioredis
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 redis_client: aioredis.Redis | None = None
 
@@ -19,12 +22,12 @@ async def connect_to_redis() -> aioredis.Redis:
                 socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
             )
             await redis_client.ping()
-            print("Successfully connected to Redis!")
+            logger.info("Connected to Redis")
             break
-        except (aioredis.RedisError, OSError):
+        except (aioredis.RedisError, OSError) as e:
             if attempt == 10:
                 raise
-            print(f"Waiting for Redis (attempt {attempt}/10)...")
+            logger.warning("Waiting for Redis (attempt %d/10): %s", attempt, e)
             await asyncio.sleep(2)
     return redis_client
 

@@ -8,10 +8,12 @@ below. Real environment variables win over `.env` (so compose.yml's
 that doesn't fit its type or bounds (e.g. `API_PORT=abc`) fails at startup
 with a pydantic ValidationError naming the variable.
 """
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 
 class Settings(BaseSettings):
@@ -28,6 +30,8 @@ class Settings(BaseSettings):
         "Local development and learning stack with PostgreSQL, Redis, Mailpit, LocalStack, and Prometheus."
     )
     API_PORT: int = Field(8000, ge=1, le=65535)
+    # Level of the app's own app.* loggers (see app/core/logging_config.py)
+    LOG_LEVEL: LogLevel = "INFO"
 
     # Database Settings
     POSTGRES_USER: str = "postgres"
@@ -62,6 +66,11 @@ class Settings(BaseSettings):
     AWS_CONNECT_TIMEOUT: float = Field(3, gt=0)
     AWS_READ_TIMEOUT: float = Field(30, gt=0)
     AWS_MAX_ATTEMPTS: int = Field(2, ge=1)
+
+    @field_validator("LOG_LEVEL", mode="before")
+    @classmethod
+    def _upper_log_level(cls, value: Any) -> Any:
+        return value.upper() if isinstance(value, str) else value
 
     @model_validator(mode="before")
     @classmethod

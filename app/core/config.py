@@ -8,6 +8,7 @@ below. Real environment variables win over `.env` (so compose.yml's
 that doesn't fit its type or bounds (e.g. `API_PORT=abc`) fails at startup
 with a pydantic ValidationError naming the variable.
 """
+import os
 from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
@@ -15,10 +16,23 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
+ENV_FILE = ".env"
+
+
+def _readable_env_file() -> str | None:
+    """Returns ENV_FILE if it can be read, else None (skip it).
+
+    The api container runs as a non-root user with the repo bind-mounted,
+    so a host .env with mode 600 exists but can't be read there; reading it
+    would crash startup, while compose.yml passes the values the container
+    needs as real env vars anyway.
+    """
+    return ENV_FILE if os.access(ENV_FILE, os.R_OK) else None
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_readable_env_file(),
         env_file_encoding="utf-8",
         # .env also holds compose-only keys (ports, UI credentials, ...)
         extra="ignore",

@@ -1,7 +1,7 @@
     <!-- ========================================================================= -->
     <!-- TAB 2: AWS SERVICES (LOCALSTACK)                                          -->
     <!-- ========================================================================= -->
-    <div id="view-aws" class="tab-content">
+    <div id="view-aws" class="tab-content" role="tabpanel" aria-labelledby="tab-btn-aws">
       <!-- AWS Banner -->
       <div class="aws-banner">
         <div class="aws-banner-left">
@@ -216,32 +216,32 @@
 
       <!-- Interactive Multi-Service AWS Console -->
       <div class="aws-console" id="aws-console-section">
-        <div class="subnav-tabs">
-          <button class="subnav-btn active" id="subtab-btn-s3" onclick="setAwsSubtab('s3', false)">
+        <div class="subnav-tabs" role="tablist" aria-label="AWS services">
+          <button class="subnav-btn active" id="subtab-btn-s3" role="tab" aria-selected="true" aria-controls="subtab-panel-s3" onclick="setAwsSubtab('s3', false)">
             <span>🪣</span> S3 Bucket Explorer
           </button>
-          <button class="subnav-btn" id="subtab-btn-sqs" onclick="setAwsSubtab('sqs', false)">
+          <button class="subnav-btn" id="subtab-btn-sqs" role="tab" aria-selected="false" aria-controls="subtab-panel-sqs" onclick="setAwsSubtab('sqs', false)">
             <span>📬</span> SQS Queues &amp; Messages
           </button>
-          <button class="subnav-btn" id="subtab-btn-dynamodb" onclick="setAwsSubtab('dynamodb', false)">
+          <button class="subnav-btn" id="subtab-btn-dynamodb" role="tab" aria-selected="false" aria-controls="subtab-panel-dynamodb" onclick="setAwsSubtab('dynamodb', false)">
             <span>🗄️</span> DynamoDB Tables
           </button>
-          <button class="subnav-btn" id="subtab-btn-secrets" onclick="setAwsSubtab('secrets', false)">
+          <button class="subnav-btn" id="subtab-btn-secrets" role="tab" aria-selected="false" aria-controls="subtab-panel-secrets" onclick="setAwsSubtab('secrets', false)">
             <span>🔐</span> Secrets Manager
           </button>
-          <button class="subnav-btn" id="subtab-btn-lambda" onclick="setAwsSubtab('lambda', false)">
+          <button class="subnav-btn" id="subtab-btn-lambda" role="tab" aria-selected="false" aria-controls="subtab-panel-lambda" onclick="setAwsSubtab('lambda', false)">
             <span>⚡</span> AWS Lambda
           </button>
-          <button class="subnav-btn" id="subtab-btn-events" onclick="setAwsSubtab('events', false)">
+          <button class="subnav-btn" id="subtab-btn-events" role="tab" aria-selected="false" aria-controls="subtab-panel-events" onclick="setAwsSubtab('events', false)">
             <span>🎯</span> EventBridge
           </button>
-          <button class="subnav-btn" id="subtab-btn-kinesis" onclick="setAwsSubtab('kinesis', false)">
+          <button class="subnav-btn" id="subtab-btn-kinesis" role="tab" aria-selected="false" aria-controls="subtab-panel-kinesis" onclick="setAwsSubtab('kinesis', false)">
             <span>🌊</span> Kinesis Streams
           </button>
         </div>
 
         <!-- 1. SUBTAB: S3 BUCKET EXPLORER -->
-        <div id="subtab-panel-s3" class="subtab-panel active">
+        <div id="subtab-panel-s3" class="subtab-panel active" role="tabpanel" aria-labelledby="subtab-btn-s3">
           <div class="panel-header">
             <div class="panel-title">
               <span>🪣</span> LocalStack S3 Bucket:
@@ -284,7 +284,7 @@
         </div>
 
         <!-- 2. SUBTAB: SQS QUEUES -->
-        <div id="subtab-panel-sqs" class="subtab-panel">
+        <div id="subtab-panel-sqs" class="subtab-panel" role="tabpanel" aria-labelledby="subtab-btn-sqs">
           <div class="panel-header">
             <div class="panel-title">
               <span>📬</span> SQS Message Queues
@@ -339,7 +339,7 @@
         </div>
 
         <!-- 3. SUBTAB: DYNAMODB -->
-        <div id="subtab-panel-dynamodb" class="subtab-panel">
+        <div id="subtab-panel-dynamodb" class="subtab-panel" role="tabpanel" aria-labelledby="subtab-btn-dynamodb">
           <div class="panel-header">
             <div class="panel-title">
               <span>🗄️</span> DynamoDB Tables &amp; Items
@@ -422,7 +422,7 @@
         </div>
 
         <!-- 4. SUBTAB: SECRETS MANAGER -->
-        <div id="subtab-panel-secrets" class="subtab-panel">
+        <div id="subtab-panel-secrets" class="subtab-panel" role="tabpanel" aria-labelledby="subtab-btn-secrets">
           <div class="panel-header">
             <div class="panel-title">
               <span>🔐</span> Secrets Manager Credentials
@@ -456,7 +456,7 @@
         </div>
 
         <!-- 5. SUBTAB: AWS LAMBDA -->
-        <div id="subtab-panel-lambda" class="subtab-panel">
+        <div id="subtab-panel-lambda" class="subtab-panel" role="tabpanel" aria-labelledby="subtab-btn-lambda">
           <div class="panel-header">
             <div class="panel-title">
               <span>⚡</span> AWS Lambda Serverless Functions
@@ -496,7 +496,7 @@
         </div>
 
         <!-- 6. SUBTAB: EVENTBRIDGE -->
-        <div id="subtab-panel-events" class="subtab-panel">
+        <div id="subtab-panel-events" class="subtab-panel" role="tabpanel" aria-labelledby="subtab-btn-events">
           <div class="panel-header">
             <div class="panel-title">
               <span>🎯</span> Amazon EventBridge Event Buses
@@ -552,7 +552,7 @@
         </div>
 
         <!-- 7. SUBTAB: KINESIS -->
-        <div id="subtab-panel-kinesis" class="subtab-panel">
+        <div id="subtab-panel-kinesis" class="subtab-panel" role="tabpanel" aria-labelledby="subtab-btn-kinesis">
           <div class="panel-header">
             <div class="panel-title">
               <span>🌊</span> Amazon Kinesis Data Streams

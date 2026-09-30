@@ -138,6 +138,8 @@ services:
       - SECURE_COOKIE=false
       - ADMIN_USER=${S3_BROWSER_USER:-admin}
       - ADMIN_PASS=${S3_BROWSER_PASS:-admin}
+      # Signs s3-browser login tokens. Set JWT_SECRET in .env (32+ chars);
+      # the fallback is a public, dev-only value.
       - JWT_SECRET=${JWT_SECRET:-sairo-secret-key-fixed-32-chars-long}
       - TELEMETRY=false
     volumes:
@@ -176,7 +178,11 @@ services:
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${GRAFANA_PORT:-3000}:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # Set GRAFANA_ADMIN_USER / GRAFANA_ADMIN_PASSWORD in .env; the `admin`
+      # fallbacks are for local dev only. Grafana applies them only when
+      # grafana_data is first created (reset with `docker compose down -v`).
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
     volumes:
       - ./docker/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - grafana_data:/var/lib/grafana

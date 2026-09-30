@@ -26,19 +26,24 @@ five-step pattern for every service. Use this as a template when adding a new on
 
 4. **Add service methods** on `AWSService` in `app/services/aws.py`. Follow the existing
    conventions:
-   - List operations: wrap in `try/except Exception`, `print()` the error, and return an empty
-     list/dict rather than raising — the frontend/portal expects a shape, not an error, from list
-     endpoints.
-   - Mutating operations (create/put/delete): let exceptions propagate as `ClientError` (or let
-     the endpoint catch and convert to `HTTPException`), since the caller needs to know a write
-     failed.
+   - Let boto3 errors (`ClientError`, `BotoCoreError`) propagate from every method, including
+     list operations. Don't return `[]` on error: an empty list would hide "LocalStack down" as
+     "nothing here". The handlers in `app/api/errors.py` turn them into `{"detail": ...}`
+     responses: not-found codes → 404, validation → 400, conflict/in-use → 409, throttling → 429,
+     connection errors/timeouts → 503, anything else → 502. If the new service uses an error
+     code the handlers don't know, add it to the matching set there.
+   - Catch a `ClientError` only for intentional behaviour, e.g. returning
+     `{"status": "already_exists"}` on `ResourceInUseException` (see `create_dynamodb_table`),
+     and re-raise every other code. Inside a list, a per-item describe call may catch
+     `ClientError` (a resource deleted mid-listing), but never `Exception`.
    - Add a module-level passthrough function at the bottom of the file (backwards-compat alias
      pattern already used for every other service) if you want it importable without going through
      `get_aws_service()`.
 
 5. **Add routes** in `app/api/v1/endpoints/aws.py`, grouped under a `# --- ServiceName Endpoints ---`
-   comment block, each wrapped in `try/except Exception: raise HTTPException(400, str(e))` for
-   mutating calls. No new router registration is needed — `aws.router` is already mounted at
+   comment block. Call the service method directly: no `try/except Exception` → `HTTPException(400)`
+   wrapper, because the central handlers map errors to the right status. Raise `HTTPException`
+   yourself only for app-level checks (e.g. the S3 upload size 413). No new router registration is needed — `aws.router` is already mounted at
    `/aws` in `app/api/v1/router.py`.
 
 6. **Add an integration test** in `app/tests/test_api.py` following the `test_aws_*_lifecycle`

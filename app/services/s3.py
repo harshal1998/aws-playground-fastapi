@@ -6,7 +6,7 @@ import socket
 from functools import cached_property
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 
 from app.core.config import settings
 
@@ -48,7 +48,9 @@ class S3Service:
             code = e.response.get("Error", {}).get("Code", "")
             if code not in ("BucketAlreadyOwnedByYou", "BucketAlreadyExists"):
                 print(f"Notice during S3 bucket initialization: {e}")
-        except OSError as e:
+        except (BotoCoreError, OSError) as e:
+            # EndpointConnectionError and botocore timeouts derive from
+            # BotoCoreError, not OSError; never let them crash startup.
             print(f"LocalStack S3 connection skipped (service may be offline): {e}")
 
     def list_bucket_objects(self) -> dict:

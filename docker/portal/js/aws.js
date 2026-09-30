@@ -240,6 +240,8 @@
     let activeDynamoTable = '';
     let activeDynamoPartitionKey = 'id';
     let currentDynamoItems = [];
+    // Only the latest scan may render; starting a new one aborts the previous.
+    let dynamoScanController = null;
 
     async function fetchDynamoTables() {
       const tbody = document.getElementById('dynamo-tables-tbody');
@@ -310,6 +312,9 @@
         await apiFetch(`/api/aws/dynamodb/tables?table_name=${encodeURIComponent(tName)}`, { method: 'DELETE' });
         showToast(`Table "${tName}" deleted.`);
         if (activeDynamoTable === tName) {
+          if (dynamoScanController) dynamoScanController.abort();
+          dynamoScanController = null;
+          activeDynamoTable = '';
           document.getElementById('dynamo-items-container').style.display = 'none';
         }
         fetchDynamoTables();
@@ -329,6 +334,9 @@
     }
 
     async function scanDynamoTable(tName, partitionKey = 'id') {
+      if (dynamoScanController) dynamoScanController.abort();
+      const controller = new AbortController();
+      dynamoScanController = controller;
       activeDynamoTable = tName;
       activeDynamoPartitionKey = partitionKey;
       document.getElementById('dynamo-selected-table').innerText = `${tName} (Key: ${partitionKey})`;
@@ -338,7 +346,11 @@
       tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 18px;">Scanning table...</td></tr>`;
 
       try {
-        const data = await apiFetch(`/api/aws/dynamodb/items?table_name=${encodeURIComponent(tName)}`);
+        const data = await apiFetch(
+          `/api/aws/dynamodb/items?table_name=${encodeURIComponent(tName)}`,
+          { signal: controller.signal }
+        );
+        if (controller !== dynamoScanController) return;  // superseded by a newer scan
         const items = data.items || [];
         currentDynamoItems = items;
 
@@ -379,6 +391,7 @@
           if (btn.dataset.action === 'delete-dynamo-item') deleteDynamoItem(btn.dataset.key);
         };
       } catch (err) {
+        if (isAbortError(err) || controller !== dynamoScanController) return;
         tbody.innerHTML = errorRow(3, err.message, 18);
         document.getElementById('dynamo-items-json').innerText = `Error: ${err.message}`;
       }
@@ -805,6 +818,8 @@
     // 7. Amazon Kinesis
     // -------------------------------------------------------------------------
     let activeKinesisStream = '';
+    // Only the latest read may render; starting a new one aborts the previous.
+    let kinesisReadController = null;
 
     async function fetchKinesisStreams() {
       const tbody = document.getElementById('kinesis-streams-tbody');
@@ -907,6 +922,9 @@
     }
 
     async function readKinesisRecords(streamName) {
+      if (kinesisReadController) kinesisReadController.abort();
+      const controller = new AbortController();
+      kinesisReadController = controller;
       activeKinesisStream = streamName;
       document.getElementById('kinesis-selected-stream').innerText = streamName;
       document.getElementById('kinesis-records-container').style.display = 'block';
@@ -915,7 +933,11 @@
       tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 18px;">Reading records from shard...</td></tr>`;
 
       try {
-        const data = await apiFetch(`/api/aws/kinesis/records?stream_name=${encodeURIComponent(streamName)}`);
+        const data = await apiFetch(
+          `/api/aws/kinesis/records?stream_name=${encodeURIComponent(streamName)}`,
+          { signal: controller.signal }
+        );
+        if (controller !== kinesisReadController) return;  // superseded by a newer read
         const records = data.records || [];
 
         if (records.length === 0) {
@@ -932,6 +954,7 @@
           </tr>
         `).join('');
       } catch (err) {
+        if (isAbortError(err) || controller !== kinesisReadController) return;
         tbody.innerHTML = errorRow(4, err.message, 18);
       }
     }
@@ -942,6 +965,9 @@
         await apiFetch(`/api/aws/kinesis/streams?name=${encodeURIComponent(name)}`, { method: 'DELETE' });
         showToast(`Stream "${name}" deleted.`);
         if (activeKinesisStream === name) {
+          if (kinesisReadController) kinesisReadController.abort();
+          kinesisReadController = null;
+          activeKinesisStream = '';
           document.getElementById('kinesis-records-container').style.display = 'none';
         }
         fetchKinesisStreams();

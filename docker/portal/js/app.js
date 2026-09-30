@@ -117,9 +117,19 @@
       }, 3200);
     }
 
-    function copyText(text) {
-      navigator.clipboard.writeText(text);
-      showToast(`Copied to clipboard: "${text}"`);
+    async function copyText(text) {
+      // navigator.clipboard is undefined outside secure contexts (e.g. plain
+      // http on a non-localhost host).
+      if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+        showToast('Copy failed: clipboard access is not available in this browser context');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast(`Copied to clipboard: "${text}"`);
+      } catch (err) {
+        showToast(`Copy failed: ${err.message || err}`);
+      }
     }
 
     // -------------------------------------------------------------------------

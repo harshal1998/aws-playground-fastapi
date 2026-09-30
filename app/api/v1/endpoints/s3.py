@@ -23,6 +23,11 @@ def _content_disposition(key: str) -> str:
     return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quote(name, safe='')}"
 
 
+def _upload_too_large() -> HTTPException:
+    """413 error for uploads over S3_MAX_UPLOAD_BYTES."""
+    return HTTPException(status_code=413, detail=f"Upload exceeds the {settings.S3_MAX_UPLOAD_BYTES} byte limit")
+
+
 @router.get("/objects")
 def list_s3_objects(s3_service: S3ServiceDep):
     """Lists all stored documents in the LocalStack S3 bucket."""
@@ -66,7 +71,7 @@ async def upload_file_to_s3(
 ):
     """Uploads any binary or text file (up to S3_MAX_UPLOAD_BYTES) to the LocalStack S3 bucket."""
     max_bytes = settings.S3_MAX_UPLOAD_BYTES
-    too_large = HTTPException(status_code=413, detail=f"Upload exceeds the {max_bytes} byte limit")
+    too_large = _upload_too_large()
 
     # Reject early on the declared size, then count bytes while streaming so a
     # chunked or mis-declared body can't buffer more than the limit in memory.
@@ -92,8 +97,11 @@ def upload_text_file(
     payload: TextUploadRequest,
     s3_service: S3ServiceDep,
 ):
-    """Uploads a custom text document to the S3 bucket."""
-    return s3_service.put_object_content(payload.filename, payload.content.encode("utf-8"))
+    """Uploads a custom text document (up to S3_MAX_UPLOAD_BYTES once encoded) to the S3 bucket."""
+    content = payload.content.encode("utf-8")
+    if len(content) > settings.S3_MAX_UPLOAD_BYTES:
+        raise _upload_too_large()
+    return s3_service.put_object_content(payload.filename, content)
 
 
 @router.post("/upload-sample")

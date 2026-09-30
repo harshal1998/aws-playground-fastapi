@@ -3,6 +3,7 @@ S3 Storage Integration for LocalStack/AWS.
 Provides a class-based S3Service managing buckets and object storage.
 """
 import socket
+import threading
 from functools import cached_property
 
 import boto3
@@ -28,6 +29,10 @@ class S3Service:
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.bucket_name = bucket_name
+        # CreateBucket runs once (at startup, or lazily on first use if
+        # LocalStack was down then) instead of before every operation.
+        self._bucket_ready = False
+        self._bucket_lock = threading.Lock()
 
     @cached_property
     def client(self):
@@ -41,24 +46,59 @@ class S3Service:
             config=BOTO_CLIENT_CONFIG,
         )
 
-    def ensure_bucket_exists(self) -> None:
-        """Ensures the default S3 bucket exists in LocalStack on startup."""
+    def _create_bucket(self) -> None:
+        """Creates the bucket (an existing one is fine) and marks it ready; raises on failure."""
         try:
             self.client.create_bucket(Bucket=self.bucket_name)
             print(f"Successfully initialized LocalStack S3 bucket: {self.bucket_name}")
         except ClientError as e:
             code = e.response.get("Error", {}).get("Code", "")
             if code not in ("BucketAlreadyOwnedByYou", "BucketAlreadyExists"):
-                print(f"Notice during S3 bucket initialization: {e}")
+                raise
+        self._bucket_ready = True
+
+    def ensure_bucket_exists(self) -> None:
+        """Best-effort bucket creation at startup; never raises.
+
+        If it fails (e.g. LocalStack is still down), the first S3 operation
+        retries it via _require_bucket().
+        """
+        try:
+            self._create_bucket()
+        except ClientError as e:
+            print(f"Notice during S3 bucket initialization: {e}")
         except (BotoCoreError, OSError) as e:
             # EndpointConnectionError and botocore timeouts derive from
             # BotoCoreError, not OSError; never let them crash startup.
             print(f"LocalStack S3 connection skipped (service may be offline): {e}")
 
+    def _require_bucket(self) -> None:
+        """Creates the bucket once, lazily, if startup could not; errors propagate."""
+        if self._bucket_ready:
+            return
+        with self._bucket_lock:
+            if not self._bucket_ready:
+                self._create_bucket()
+
+    def _call(self, operation, **kwargs):
+        """Runs an S3 client operation on the bucket, recreating it once if it vanished.
+
+        The bucket is only created once per process, so if LocalStack restarts
+        without persistence, NoSuchBucket resets that state and retries.
+        """
+        self._require_bucket()
+        try:
+            return operation(Bucket=self.bucket_name, **kwargs)
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") != "NoSuchBucket":
+                raise
+        self._bucket_ready = False
+        self._require_bucket()
+        return operation(Bucket=self.bucket_name, **kwargs)
+
     def list_bucket_objects(self) -> dict:
         """Lists all objects in the configured S3 bucket."""
-        self.ensure_bucket_exists()
-        response = self.client.list_objects_v2(Bucket=self.bucket_name)
+        response = self._call(self.client.list_objects_v2)
         contents = response.get("Contents", [])
         objects = [
             {
@@ -76,16 +116,14 @@ class S3Service:
 
     def get_object_content(self, key: str) -> tuple[bytes, str]:
         """Retrieves object content and its content-type from S3."""
-        self.ensure_bucket_exists()
-        obj = self.client.get_object(Bucket=self.bucket_name, Key=key)
+        obj = self._call(self.client.get_object, Key=key)
         content = obj["Body"].read()
         content_type = obj.get("ContentType", "application/octet-stream")
         return content, content_type
 
     def delete_object(self, key: str) -> None:
         """Deletes an object from the S3 bucket."""
-        self.ensure_bucket_exists()
-        self.client.delete_object(Bucket=self.bucket_name, Key=key)
+        self._call(self.client.delete_object, Key=key)
 
     def put_object_content(
         self,
@@ -94,8 +132,7 @@ class S3Service:
         content_type: str = "application/octet-stream",
     ) -> dict:
         """Puts arbitrary byte content into S3 under the given key."""
-        self.ensure_bucket_exists()
-        self.client.put_object(Bucket=self.bucket_name, Key=key, Body=content, ContentType=content_type)
+        self._call(self.client.put_object, Key=key, Body=content, ContentType=content_type)
         return {
             "status": "success",
             "service": "LocalStack S3",

@@ -48,6 +48,8 @@ default in every environment, including inside Docker.
 | :--- | :--- | :--- |
 | `DB_POOL_MIN_SIZE` | `5` | no |
 | `DB_POOL_MAX_SIZE` | `20` | no |
+| `REDIS_SOCKET_CONNECT_TIMEOUT` | `1` (seconds) | no |
+| `REDIS_SOCKET_TIMEOUT` | `1` (seconds) — a slower Redis reply is treated as a cache miss | no |
 | `MAILPIT_HOST` | `localhost` | yes → `mailpit` |
 | `MAILPIT_PORT` | `1025` | yes → `1025` (same value, set explicitly) |
 | `AWS_ENDPOINT_URL` | `http://localhost:4566` | yes → `http://localstack:4566` |

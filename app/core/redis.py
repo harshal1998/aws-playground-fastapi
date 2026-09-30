@@ -12,7 +12,12 @@ async def connect_to_redis() -> aioredis.Redis:
     global redis_client
     for attempt in range(1, 11):
         try:
-            redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+            redis_client = aioredis.from_url(
+                settings.REDIS_URL,
+                decode_responses=True,
+                socket_connect_timeout=settings.REDIS_SOCKET_CONNECT_TIMEOUT,
+                socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
+            )
             await redis_client.ping()
             print("Successfully connected to Redis!")
             break

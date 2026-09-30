@@ -3,7 +3,7 @@
     <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-queue-title" tabindex="-1">
       <h3 class="modal-title" id="modal-queue-title">Create New SQS Queue</h3>
       <div class="form-group">
-        <label class="form-label">Queue Name</label>
+        <label class="form-label" for="new-queue-name">Queue Name</label>
         <input type="text" id="new-queue-name" class="form-input" placeholder="e.g. notifications-queue" />
       </div>
       <div class="modal-actions">
@@ -18,11 +18,11 @@
     <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-secret-title" tabindex="-1">
       <h3 class="modal-title" id="modal-secret-title">Store Mock AWS Secret</h3>
       <div class="form-group">
-        <label class="form-label">Secret Name</label>
+        <label class="form-label" for="new-secret-name">Secret Name</label>
         <input type="text" id="new-secret-name" class="form-input" placeholder="e.g. app/api_token" />
       </div>
       <div class="form-group">
-        <label class="form-label">Secret Value (JSON or String)</label>
+        <label class="form-label" for="new-secret-val">Secret Value (JSON or String)</label>
         <textarea id="new-secret-val" class="form-textarea" rows="4" placeholder="Enter sensitive value here..."></textarea>
       </div>
       <div class="modal-actions">
@@ -48,11 +48,11 @@
     <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-dynamo-table-title" tabindex="-1">
       <h3 class="modal-title" id="modal-dynamo-table-title">Create DynamoDB Table</h3>
       <div class="form-group">
-        <label class="form-label">Table Name</label>
+        <label class="form-label" for="new-dynamo-table-name">Table Name</label>
         <input type="text" id="new-dynamo-table-name" class="form-input" placeholder="e.g. customers or orders" />
       </div>
       <div class="form-group">
-        <label class="form-label">Partition Key Name (HASH)</label>
+        <label class="form-label" for="new-dynamo-key-name">Partition Key Name (HASH)</label>
         <input type="text" id="new-dynamo-key-name" class="form-input" value="id" placeholder="e.g. id or user_id" />
       </div>
       <div class="modal-actions">
@@ -67,7 +67,7 @@
     <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-dynamo-item-title" tabindex="-1" style="max-width: 600px;">
       <h3 class="modal-title" id="modal-dynamo-item-title">Insert Item into <span id="modal-item-table-name"></span></h3>
       <div class="form-group">
-        <label class="form-label">JSON Document (Must include partition key: <span id="modal-item-key-label" class="mono-cell"></span>)</label>
+        <label class="form-label" for="new-dynamo-item-json">JSON Document (Must include partition key: <span id="modal-item-key-label" class="mono-cell"></span>)</label>
         <textarea id="new-dynamo-item-json" class="form-textarea" rows="8" placeholder='{&#10;  "id": "item_101",&#10;  "title": "My Custom Item",&#10;  "price": 49.99,&#10;  "active": true&#10;}'></textarea>
       </div>
       <div class="modal-actions">
@@ -85,7 +85,7 @@
         Partition Key (<span id="modal-edit-key-name" class="mono-cell" style="font-weight: 600;"></span>): <b id="modal-edit-key-value" class="mono-cell" style="color: #38bdf8;"></b>
       </div>
       <div class="form-group">
-        <label class="form-label">Document Attributes (JSON):</label>
+        <label class="form-label" for="edit-dynamo-item-json">Document Attributes (JSON):</label>
         <textarea id="edit-dynamo-item-json" class="form-textarea" rows="10" style="font-family: 'JetBrains Mono', monospace; font-size: 12.5px;"></textarea>
       </div>
       <div class="modal-actions">
@@ -100,11 +100,11 @@
     <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-create-lambda-title" tabindex="-1" style="max-width: 600px;">
       <h3 class="modal-title" id="modal-create-lambda-title">⚡ Deploy Python Lambda Function</h3>
       <div class="form-group">
-        <label class="form-label">Function Name</label>
+        <label class="form-label" for="new-lambda-name">Function Name</label>
         <input type="text" id="new-lambda-name" class="form-input" placeholder="e.g. process_order" />
       </div>
       <div class="form-group">
-        <label class="form-label">Handler Code (Python 3.11)</label>
+        <label class="form-label" for="new-lambda-code">Handler Code (Python 3.11)</label>
         <textarea id="new-lambda-code" class="form-textarea" rows="8" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;"></textarea>
       </div>
       <div class="modal-actions">
@@ -119,15 +119,15 @@
     <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-invoke-lambda-title" tabindex="-1" style="max-width: 620px;">
       <h3 class="modal-title" id="modal-invoke-lambda-title">⚡ Invoke Lambda: <span id="modal-invoke-fn-name" class="mono-cell" style="color: var(--accent-amber);"></span></h3>
       <div class="form-group">
-        <label class="form-label">Invocation Payload (JSON)</label>
+        <label class="form-label" for="invoke-lambda-payload">Invocation Payload (JSON)</label>
         <textarea id="invoke-lambda-payload" class="form-textarea" rows="5" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">{
   "action": "test_run",
   "user_id": 42
 }</textarea>
       </div>
       <div id="invoke-result-box" style="display: none; margin-bottom: 14px;">
-        <label class="form-label">Execution Result:</label>
-        <pre id="invoke-result-output" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; background: rgba(0,0,0,0.5); padding: 12px; border-radius: 8px; color: #34d399; max-height: 180px; overflow-y: auto;"></pre>
+        <div class="form-label" id="invoke-result-label">Execution Result:</div>
+        <pre id="invoke-result-output" aria-labelledby="invoke-result-label" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; background: rgba(0,0,0,0.5); padding: 12px; border-radius: 8px; color: #34d399; max-height: 180px; overflow-y: auto;"></pre>
       </div>
       <div class="modal-actions">
         <button class="ctrl-btn" onclick="closeModal('modal-invoke-lambda')">Close</button>
@@ -141,15 +141,15 @@
     <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-put-event-title" tabindex="-1" style="max-width: 580px;">
       <h3 class="modal-title" id="modal-put-event-title">🎯 Publish EventBridge Event to <span id="modal-put-event-bus" class="mono-cell" style="color: #a78bfa;">default</span></h3>
       <div class="form-group">
-        <label class="form-label">Event Source</label>
+        <label class="form-label" for="event-source">Event Source</label>
         <input type="text" id="event-source" class="form-input" value="custom.fastapi.app" placeholder="e.g. order.service" />
       </div>
       <div class="form-group">
-        <label class="form-label">Detail Type</label>
+        <label class="form-label" for="event-detail-type">Detail Type</label>
         <input type="text" id="event-detail-type" class="form-input" value="OrderPlaced" placeholder="e.g. OrderPlaced or UserRegistered" />
       </div>
       <div class="form-group">
-        <label class="form-label">Event Detail (JSON)</label>
+        <label class="form-label" for="event-detail-json">Event Detail (JSON)</label>
         <textarea id="event-detail-json" class="form-textarea" rows="5" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">{
   "order_id": 1001,
   "amount": 199.50,
@@ -168,11 +168,11 @@
     <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-create-kinesis-title" tabindex="-1">
       <h3 class="modal-title" id="modal-create-kinesis-title">🌊 Create Kinesis Data Stream</h3>
       <div class="form-group">
-        <label class="form-label">Stream Name</label>
+        <label class="form-label" for="new-kinesis-name">Stream Name</label>
         <input type="text" id="new-kinesis-name" class="form-input" placeholder="e.g. telemetry-events" />
       </div>
       <div class="form-group">
-        <label class="form-label">Shard Count</label>
+        <label class="form-label" for="new-kinesis-shards">Shard Count</label>
         <input type="number" id="new-kinesis-shards" class="form-input" value="1" min="1" max="10" />
       </div>
       <div class="modal-actions">
@@ -187,11 +187,11 @@
     <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-kinesis-put-title" tabindex="-1" style="max-width: 580px;">
       <h3 class="modal-title" id="modal-kinesis-put-title">🌊 Put Record into <span id="modal-kinesis-put-stream" class="mono-cell" style="color: var(--accent-cyan);"></span></h3>
       <div class="form-group">
-        <label class="form-label">Partition Key</label>
+        <label class="form-label" for="kinesis-put-partkey">Partition Key</label>
         <input type="text" id="kinesis-put-partkey" class="form-input" value="device_sensor_01" />
       </div>
       <div class="form-group">
-        <label class="form-label">Data Payload (JSON or String)</label>
+        <label class="form-label" for="kinesis-put-data">Data Payload (JSON or String)</label>
         <textarea id="kinesis-put-data" class="form-textarea" rows="5" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">{
   "temp": 72.4,
   "humidity": 45,

@@ -54,6 +54,7 @@ default in every environment, including inside Docker.
 
 | Variable | Default in `Settings` | Overridden in `compose.yml`? |
 | :--- | :--- | :--- |
+| `LOG_LEVEL` | `INFO` — level of the app's own `app.*` loggers (`DEBUG`/`INFO`/`WARNING`/`ERROR`/`CRITICAL`) | no |
 | `DB_POOL_MIN_SIZE` | `5` | no |
 | `DB_POOL_MAX_SIZE` | `20` | no |
 | `REDIS_SOCKET_CONNECT_TIMEOUT` | `1` (seconds) | no |

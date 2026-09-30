@@ -7,9 +7,12 @@ actual request parameters (MaxResults, NextToken, ContinuationToken, ...)
 are checked without needing LocalStack. Integration tests use `requests`
 against API_URL (live stack).
 """
+import ast
 import asyncio
 import datetime
+import logging
 import os
+import pathlib
 import time
 import uuid
 
@@ -18,6 +21,7 @@ from botocore.stub import ANY, Stubber
 from fastapi import APIRouter, FastAPI
 from prometheus_client import REGISTRY
 
+from app.core.logging_config import configure_logging
 from app.core.metrics import PrometheusMetricsMiddleware
 from app.services.aws import AWSService
 from app.services.s3 import S3Service
@@ -330,3 +334,37 @@ def test_routes_work_with_and_without_the_api_prefix():
         assert res.json()["status"] == "online"
     assert requests.get(f"{API_URL}/api/openapi.json", timeout=TIMEOUT).status_code == 200
     assert requests.get(f"{API_URL}/metrics", timeout=TIMEOUT).status_code == 200
+
+
+# ------------------------------------------------------------------------------
+# Logging (unit)
+# ------------------------------------------------------------------------------
+
+APP_DIR = pathlib.Path(__file__).resolve().parents[1]
+
+
+def test_app_code_has_no_print_calls():
+    """Verify app code (outside tests) logs instead of calling print()."""
+    offenders = []
+    for path in APP_DIR.rglob("*.py"):
+        if "tests" in path.relative_to(APP_DIR).parts:
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "print":
+                offenders.append(f"{path.relative_to(APP_DIR)}:{node.lineno}")
+    assert offenders == []
+
+
+def test_app_log_lines_show_level_and_logger_name():
+    """Verify app.* loggers get a handler whose lines carry the level and logger name."""
+    configure_logging()
+    configure_logging()  # idempotent: still a single handler
+    app_logger = logging.getLogger("app")
+    assert len(app_logger.handlers) == 1
+    record = logging.getLogger("app.services.s3").makeRecord(
+        "app.services.s3", logging.WARNING, __file__, 1, "bucket %s not ready", ("b",), None
+    )
+    line = app_logger.handlers[0].format(record)
+    assert "WARNING" in line
+    assert "[app.services.s3]" in line
+    assert line.endswith("bucket b not ready")

@@ -6,6 +6,7 @@ import base64
 import http.client
 import io
 import json
+import logging
 import threading
 import time
 import urllib.request
@@ -19,6 +20,8 @@ from botocore.exceptions import ClientError, WaiterError
 
 from app.core.boto import BOTO_CLIENT_CONFIG
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 _SERIALIZER = TypeSerializer()
 _DESERIALIZER = TypeDeserializer()
@@ -433,7 +436,7 @@ class AWSService:
             )
             return "ready"
         except WaiterError as e:
-            print(f"Lambda {function_name} not ready after {waiter_name}: {e}")
+            logger.warning("Lambda %s not ready after %s: %s", function_name, waiter_name, e)
             return "pending"
 
     def invoke_lambda_function(self, function_name: str, payload: dict[str, Any] | str = "") -> dict[str, Any]:

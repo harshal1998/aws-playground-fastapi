@@ -6,10 +6,14 @@ from app.api.errors import register_exception_handlers
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import close_database_connection, connect_to_database
+from app.core.logging_config import configure_logging
 from app.core.metrics import PrometheusMetricsMiddleware, get_metrics_response
 from app.core.redis import close_redis_connection, connect_to_redis
 from app.services.aws import get_aws_service
 from app.services.s3 import get_s3_service
+
+# Before anything logs: route app.* loggers to stderr (uvicorn/docker logs)
+configure_logging()
 
 
 @asynccontextmanager

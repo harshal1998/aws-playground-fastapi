@@ -1,8 +1,11 @@
+import logging
 import smtplib
 import socket
 from email.message import EmailMessage
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 def send_mock_email(item_name: str, item_price: float):
@@ -18,6 +21,6 @@ def send_mock_email(item_name: str, item_price: float):
 
         with smtplib.SMTP(settings.MAILPIT_HOST, settings.MAILPIT_PORT, timeout=3) as server:
             server.send_message(msg)
-        print(f"[MAILPIT] Sent mock email notification for {item_name}")
+        logger.info("Sent mock email notification for %s to Mailpit", item_name)
     except (smtplib.SMTPException, OSError) as e:
-        print(f"[MAILPIT] Notification delivery skipped: {e}")
+        logger.warning("Mailpit notification delivery skipped: %s", e)

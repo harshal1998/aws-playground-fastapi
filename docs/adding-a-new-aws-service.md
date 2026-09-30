@@ -8,15 +8,16 @@ six-step pattern for every service. Use this as a template when adding a new one
 1. **Enable it in LocalStack** — add the service name to `SERVICES=` in `compose.yml`'s
    `localstack.environment` block. See [Environment Variables](environment-variables.md#localstack-service-enablement).
 
-2. **Add a cached boto3 client property** in `app/services/aws.py`'s `AWSService` class:
+2. **Create the boto3 client in `AWSService.__init__`** in `app/services/aws.py`, next to the
+   others:
    ```python
-   @cached_property
-   def sns(self):
-       """Cached SNS boto3 client."""
-       return self._get_boto_client("sns")
+   self.sns = self._get_boto_client("sns")
    ```
-   `_get_boto_client()` applies the shared `BOTO_CLIENT_CONFIG` from `app/core/boto.py`
-   (connect/read timeouts and retry attempts), so don't construct `boto3.client(...)` directly.
+   `_get_boto_client()` builds it from the service's private `boto3.session.Session` and applies
+   the shared `BOTO_CLIENT_CONFIG` from `app/core/boto.py` (connect/read timeouts and retry
+   attempts). Don't construct `boto3.client(...)` directly or create clients lazily: the default
+   session isn't thread-safe, and the singleton is built once at startup. List operations should
+   use `_paginate(client, "list_...", "ResultKey")` so they don't stop at the first page.
 
 3. **Add request/response schemas** in `app/schemas/aws.py` (plain Pydantic `BaseModel`s, one per
    operation that needs a JSON body — GET/DELETE endpoints in this codebase use `Query(...)`

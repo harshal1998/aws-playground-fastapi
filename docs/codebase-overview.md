@@ -22,7 +22,9 @@ services and two profile-gated one-shot services.
     client.
   - `metrics.py` — request counter + latency histogram middleware, labelled by route template;
     aggregates all uvicorn workers when `PROMETHEUS_MULTIPROC_DIR` is set.
-  - `config.py` — a frozen dataclass `Settings` reading env vars (no pydantic-settings).
+  - `config.py` — a `pydantic-settings` `Settings` class: typed, validated env vars, plus `.env`
+    loading.
+  - `logging_config.py` — sends the app's `app.*` loggers to stderr with level and logger name.
 - **`api/`**:
   - `deps.py` — typed `Annotated[..., Depends(...)]` aliases (`DbPoolDep`, `RedisDep`,
     `AWSServiceDep`, `S3ServiceDep`).
@@ -34,9 +36,9 @@ services and two profile-gated one-shot services.
   - `s3.py` — class-based `S3Service` (singleton via `get_s3_service()`), boto3 client pointed at
     LocalStack, bucket ensure/list/get/put/delete.
   - `aws.py` — larger class-based `AWSService` wrapping SQS, DynamoDB, Secrets Manager, Lambda
-    (zips code on the fly), EventBridge, and Kinesis — all against LocalStack. The `list_*`
-    methods swallow errors broadly (`except Exception`) and return empty lists; create/put/
-    delete/scan/invoke let errors propagate so the endpoint can return a 4xx.
+    (zips code on the fly), EventBridge, and Kinesis — all against LocalStack. List operations
+    follow every page; Kinesis reads cover every shard. boto3 errors propagate to the handlers
+    in `api/errors.py`, which map them to 404/400/409/429/502/503.
   - `email.py` — fire-and-forget SMTP to Mailpit, used as a FastAPI `BackgroundTask` on item
     creation.
 - **`tests/`** — mostly integration tests that hit a **live running stack** via `requests`:
@@ -58,11 +60,6 @@ vanilla-JS "Developer Portal" at `docker/portal/`), Locust (load testing), plus 
 
 ## Notable observations
 
-- `config.py`'s `DATABASE_URL` default embeds `POSTGRES_USER`/`PASSWORD` at class-definition time
-  as dataclass field defaults — works, but relies on field evaluation order within the dataclass
-  body.
-- `aws.py` has a lot of repeated `try/except Exception: print(...); return []` boilerplate across
-  list operations — a candidate for simplification if consolidating error handling.
 - Tests require the full stack running (`docker compose up`) — almost all are integration tests;
   only the stubbed Redis-outage tests in `test_s3_and_cache.py` run without the stack (they
   still need the app's Python dependencies installed).

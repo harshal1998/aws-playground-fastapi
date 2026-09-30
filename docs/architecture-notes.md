@@ -44,16 +44,13 @@ to keep in sync. When running the API outside the `api` container (`dev.ps1 run`
 `uvicorn`), apply migrations first with `docker compose run --rm migration` (or
 `.\dev.ps1 migrate`).
 
-## Broad `except Exception` in `AWSService` list operations
+## AWS errors propagate to one set of handlers
 
-Every `list_*` method in `app/services/aws.py` (SQS, DynamoDB, Lambda, EventBridge, Kinesis)
-catches `Exception` broadly, logs via `print()`, and returns an empty list/dict instead of
-propagating. This trades error visibility for a resilient portal UI — the Developer Portal's AWS
-Explorer tab can render "0 queues" instead of crashing if LocalStack is still starting up or a
-particular service isn't enabled in `SERVICES=`. Mutating operations (create/put/delete) largely
-do **not** swallow exceptions the same way — they let `ClientError` propagate up to the endpoint,
-which converts it to an `HTTPException(400, ...)`, since a failed write needs to surface to the
-caller.
+`AWSService` list operations used to catch `Exception`, `print()` it and return an empty list,
+which made "LocalStack is down" look like "nothing here". Now every method lets boto3 errors
+propagate and `app/api/errors.py` maps them to HTTP statuses in one place (404/400/409/429, 503
+when LocalStack is unreachable, 502 otherwise). List operations use boto3 paginators, so they
+return every page rather than the first 50-1000 results.
 
 ## Redis and Postgres treated as fault-tolerant dependencies
 

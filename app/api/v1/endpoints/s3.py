@@ -2,8 +2,10 @@ from urllib.parse import quote
 
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, HTTPException, Query, Request, Response
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import S3ServiceDep
+from app.core.config import settings
 from app.schemas.s3 import TextUploadRequest
 
 router = APIRouter()
@@ -62,10 +64,27 @@ async def upload_file_to_s3(
     s3_service: S3ServiceDep,
     filename: str = Query(...),
 ):
-    """Uploads any binary or text file to the LocalStack S3 bucket."""
-    content = await request.body()
+    """Uploads any binary or text file (up to S3_MAX_UPLOAD_BYTES) to the LocalStack S3 bucket."""
+    max_bytes = settings.S3_MAX_UPLOAD_BYTES
+    too_large = HTTPException(status_code=413, detail=f"Upload exceeds the {max_bytes} byte limit")
+
+    # Reject early on the declared size, then count bytes while streaming so a
+    # chunked or mis-declared body can't buffer more than the limit in memory.
+    content_length = request.headers.get("content-length")
+    if content_length and content_length.isdigit() and int(content_length) > max_bytes:
+        raise too_large
+
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > max_bytes:
+            raise too_large
+
     content_type = request.headers.get("content-type", "application/octet-stream")
-    return s3_service.put_object_content(filename, content, content_type=content_type)
+    # boto3 is blocking: run it in the threadpool so the event loop keeps serving.
+    return await run_in_threadpool(
+        s3_service.put_object_content, filename, bytes(body), content_type=content_type
+    )
 
 
 @router.post("/upload-text")

@@ -1,12 +1,14 @@
 import asyncio
 import datetime
+import http.client
 import os
 from decimal import Decimal
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import redis.asyncio as aioredis
 import requests
 
+from app.core.config import settings
 from app.schemas.item import ItemCreate
 from app.services import items as items_service
 
@@ -143,3 +145,44 @@ def test_s3_download_key_with_quotes_and_unicode():
             assert response.content == b"hello"
         finally:
             _delete(key)
+
+
+# ------------------------------------------------------------------------------
+# S3 uploads: size limit
+# ------------------------------------------------------------------------------
+
+
+def test_s3_upload_larger_than_nginx_default_succeeds():
+    """Verify an upload over 1 MB (nginx's old default) but under the limit is stored intact."""
+    key = "regression_2mb.bin"
+    content = os.urandom(2 * 1024 * 1024)
+    response = _upload(key, content)
+    try:
+        assert response.status_code == 200
+        assert response.json()["size_bytes"] == len(content)
+        download = requests.get(f"{API_URL}/s3/file", params={"key": key}, timeout=10)
+        assert download.status_code == 200
+        assert download.content == content
+    finally:
+        _delete(key)
+
+
+def test_s3_upload_over_limit_returns_413():
+    """Verify an upload declaring more than S3_MAX_UPLOAD_BYTES is rejected with 413."""
+    # Send only the headers: the API must reject on the declared Content-Length
+    # without reading the body. (Streaming an oversize body with requests would
+    # race against the server closing the connection.)
+    parsed = urlsplit(API_URL)
+    conn = http.client.HTTPConnection(parsed.hostname, parsed.port or 80, timeout=10)
+    try:
+        conn.putrequest("POST", "/s3/upload?filename=regression_too_large.bin")
+        conn.putheader("Content-Type", "application/octet-stream")
+        conn.putheader("Content-Length", str(settings.S3_MAX_UPLOAD_BYTES + 1))
+        conn.endheaders()
+        response = conn.getresponse()
+        assert response.status == 413
+    finally:
+        conn.close()
+
+    listing = requests.get(f"{API_URL}/s3/objects", timeout=10).json()
+    assert "regression_too_large.bin" not in [obj["key"] for obj in listing["objects"]]

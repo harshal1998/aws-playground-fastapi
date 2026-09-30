@@ -656,6 +656,11 @@
       animation: fadeIn 0.2s;
     }
 
+    /* The dialog box takes focus (tabindex="-1") only as a fallback target. */
+    .modal-box:focus {
+      outline: none;
+    }
+
     .modal-title {
       font-size: 18px;
       font-weight: 700;

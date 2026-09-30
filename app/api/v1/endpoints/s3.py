@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
@@ -5,6 +7,18 @@ from app.api.deps import S3ServiceDep
 from app.schemas.s3 import TextUploadRequest
 
 router = APIRouter()
+
+
+def _content_disposition(key: str) -> str:
+    """Builds an attachment Content-Disposition header that is safe for any key.
+
+    filename= gets an ASCII-only fallback (non-ASCII, control characters,
+    quotes and backslashes replaced by "_"); the exact name goes in the
+    RFC 5987 filename* parameter.
+    """
+    name = key.rsplit("/", 1)[-1] or "download"
+    fallback = "".join(c if " " <= c <= "~" and c not in '"\\' else "_" for c in name)
+    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quote(name, safe='')}"
 
 
 @router.get("/objects")
@@ -15,13 +29,18 @@ def list_s3_objects(s3_service: S3ServiceDep):
 
 @router.get("/file")
 def get_s3_file(key: str, s3_service: S3ServiceDep):
-    """Downloads or views the content of an S3 object."""
+    """Downloads the content of an S3 object as a file attachment."""
     try:
         content, content_type = s3_service.get_object_content(key)
+        # Never render uploaded content inline: an uploaded HTML/SVG file would
+        # otherwise run scripts on the portal's origin.
         return Response(
             content=content,
             media_type=content_type,
-            headers={"Content-Disposition": f'inline; filename="{key}"'},
+            headers={
+                "Content-Disposition": _content_disposition(key),
+                "X-Content-Type-Options": "nosniff",
+            },
         )
     except ClientError as e:
         raise HTTPException(status_code=404, detail="File not found in S3 bucket") from e

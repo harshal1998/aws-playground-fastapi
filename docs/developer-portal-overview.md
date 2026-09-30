@@ -2,7 +2,8 @@
 
 `docker/portal/` is a static, vanilla-JS/HTML/CSS dashboard served by the `nginx` container at
 `http://localhost` (root path `/`). It has no build step, no framework, and no bundler — it's
-served as-is from `docker/nginx/nginx.conf`'s `location /` block.
+served as-is from `docker/nginx/nginx.conf`'s `location /` block. **Always open it through
+nginx at `http://localhost`**; opening `index.html` as a file does not work (see below).
 
 ## Structure
 
@@ -21,18 +22,21 @@ docker/portal/
     └── modals.html            # Shared modal dialogs used by aws.js (create queue, edit item, invoke lambda, etc.)
 ```
 
-## How the page is assembled: Nginx SSI, with a JS fallback
+## How the page is assembled: Nginx SSI
 
 `index.html` doesn't contain the actual card markup — it pulls partials in via **Nginx
 Server-Side Includes** (`ssi on;` in `nginx.conf`, `<!--# include file="..." -->` directives).
-This only works when the page is served *through Nginx* on port 80.
+This only works when the page is served *through Nginx* (`http://localhost`, port 80 by default,
+`GATEWAY_PORT` in `.env`).
 
-If you open `docker/portal/index.html` directly as a file, or serve it from something without SSI
-support, the includes are inert HTML comments and `.container` renders empty. `app.js`'s
-`checkAndLoadPartialFallback()` detects an empty `.container` on `DOMContentLoaded` and fetches
-the four partials via `fetch()` instead, stitching them into the DOM manually. This is why the
-portal works both via `http://localhost` (Nginx/SSI) and, with reduced fidelity, if served some
-other way.
+The portal depends on that nginx route in two ways, so opening `docker/portal/index.html` as a
+file (`file://`) leaves it broken:
+- Without SSI the includes are inert HTML comments and `.container` renders empty. `app.js`'s
+  `checkAndLoadPartialFallback()` then tries to `fetch()` the four partials, but from absolute
+  `/partials/...` paths, which don't resolve from a file (and browsers block `fetch()` on
+  `file://` pages anyway).
+- Every API call uses an absolute `/api/...` path, which only works because nginx rewrites
+  `/api/` and proxies it to `api:8000`. Nothing answers those paths outside nginx.
 
 ## Two tabs, two different data sources
 

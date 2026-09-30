@@ -2,13 +2,17 @@
     // Tab Management
     // -------------------------------------------------------------------------
     function setPortalTab(tabName) {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+      });
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
 
       const btn = document.getElementById(`tab-btn-${tabName}`);
       const content = document.getElementById(`view-${tabName}`);
       if (btn && content) {
         btn.classList.add('active');
+        btn.setAttribute('aria-selected', 'true');
         content.classList.add('active');
       }
 
@@ -71,13 +75,17 @@
         if (loader) loader();
       }
 
-      document.querySelectorAll('.subnav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.subnav-btn').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+      });
       document.querySelectorAll('.subtab-panel').forEach(p => p.classList.remove('active'));
 
       const btn = document.getElementById(`subtab-btn-${subtabName}`);
       const panel = document.getElementById(`subtab-panel-${subtabName}`);
       if (btn && panel) {
         btn.classList.add('active');
+        btn.setAttribute('aria-selected', 'true');
         panel.classList.add('active');
         if (shouldScroll) {
           requestAnimationFrame(() => {

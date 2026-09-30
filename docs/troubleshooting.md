@@ -11,12 +11,20 @@ default). If `docker compose up -d` fails or a container won't come up, check fo
 process already bound to one of: `80, 3000, 4566, 5050, 5432, 6379, 8000, 8025, 8081, 8085, 8089, 9090, 1025`.
 Override the conflicting port via `.env` rather than editing `compose.yml`.
 
+## Services unreachable from another machine or VM
+
+That's intentional: ports bind to `127.0.0.1` unless `BIND_ADDRESS` in `.env` says otherwise.
+Set `BIND_ADDRESS=0.0.0.0` (then `docker compose up -d` to recreate the containers) only on a
+trusted network — the API is unauthenticated and can deploy Lambda code.
+
 ## API container can't reach Postgres/Redis on startup
 
 `app/core/database.py` and `app/core/redis.py` both retry up to 10 times (2s apart) before
 raising. This is normal on a cold `docker compose up` — Postgres/Redis take a few seconds to
 become healthy and `api` has a `depends_on: condition: service_healthy` guard, but the retry loop
-is a second line of defense. If it still fails after ~20s, check `docker compose logs db redis`
+is a second line of defense. If it still fails after ~20s the `api` process exits and Compose
+restarts it (`restart: unless-stopped`), so a restart loop in `docker compose ps` points here
+too. Check `docker compose logs db redis`
 for the actual failure (e.g. a bad `POSTGRES_PASSWORD` mismatch between `.env` and an existing
 `postgres_data` volume from a previous run — Postgres won't re-initialize credentials on an
 existing volume).
@@ -37,7 +45,10 @@ the `localstack` container, **not** in a named volume in `compose.yml`. That mea
   LocalStack state depending on LocalStack's persistence settings — treat anything created in
   LocalStack as ephemeral.
 - `app/main.py`'s lifespan calls `get_s3_service().ensure_bucket_exists()` on every API startup,
-  so the S3 bucket is always recreated automatically. Other resources (SQS queues, DynamoDB
+  so the S3 bucket is recreated automatically *when the API starts*. If LocalStack is
+  unreachable at that moment the API logs it and starts anyway without the bucket, and a
+  LocalStack restart after the API is up also loses it; in both cases run
+  `docker compose restart api` once LocalStack is healthy. Other resources (SQS queues, DynamoDB
   tables, Lambda functions) are not — you'll need to recreate them (or rerun
   `docker compose run --rm test`, which exercises the full lifecycle) after a LocalStack restart.
 
@@ -65,10 +76,12 @@ a cache bug — `RedisDep` returns `None` rather than raising when Redis isn't c
 
 ## Running tests locally without Docker
 
-`app/tests/test_api.py` is a pure integration suite — it makes real HTTP calls via `requests`
-against `API_URL` (default `http://localhost:8000`). There's no mocking layer, so the full stack
-(`docker compose up -d`) must already be running, and running `pytest` directly on the host works
-identically to `docker compose run --rm test` as long as the API is reachable at `API_URL`.
+Almost all of `app/tests/` is integration tests — real HTTP calls via `requests` against
+`API_URL` (default `http://localhost:8000`) — so the full stack (`docker compose up -d`) must
+already be running. Running `pytest` directly on the host works like
+`docker compose run --rm test` as long as the API is reachable at `API_URL` and the app's
+dependencies (`requirements.txt`) are installed: `test_s3_and_cache.py` imports `app` to drive
+the Redis-outage tests with stub clients.
 
 ## `relation "items" does not exist`
 

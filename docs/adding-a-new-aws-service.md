@@ -1,7 +1,7 @@
 # Adding a New AWS Service Integration
 
 The `aws` router (SQS, DynamoDB, Secrets Manager, Lambda, EventBridge, Kinesis) follows the same
-five-step pattern for every service. Use this as a template when adding a new one (e.g. SNS, SSM).
+six-step pattern for every service. Use this as a template when adding a new one (e.g. SNS, SSM).
 
 ## The pattern
 
@@ -15,6 +15,8 @@ five-step pattern for every service. Use this as a template when adding a new on
        """Cached SNS boto3 client."""
        return self._get_boto_client("sns")
    ```
+   `_get_boto_client()` applies the shared `BOTO_CLIENT_CONFIG` from `app/core/boto.py`
+   (connect/read timeouts and retry attempts), so don't construct `boto3.client(...)` directly.
 
 3. **Add request/response schemas** in `app/schemas/aws.py` (plain Pydantic `BaseModel`s, one per
    operation that needs a JSON body — GET/DELETE endpoints in this codebase use `Query(...)`
@@ -46,8 +48,8 @@ five-step pattern for every service. Use this as a template when adding a new on
    yourself only for app-level checks (e.g. the S3 upload size 413). No new router registration is needed — `aws.router` is already mounted at
    `/aws` in `app/api/v1/router.py`.
 
-6. **Add an integration test** in `app/tests/test_api.py` following the `test_aws_*_lifecycle`
-   naming convention: create → verify via list/scan → (update if applicable) → the test suite runs
+6. **Add an integration test** under `app/tests/` (for example a new `test_<service>.py`, as
+   `test_aws_lambda_dynamodb.py` does) following the `test_aws_*_lifecycle` naming convention: create → verify via list/scan → (update if applicable) → the test suite runs
    against a live stack, so no mocking is needed or expected.
 
 ## Things to double check
@@ -58,7 +60,9 @@ five-step pattern for every service. Use this as a template when adding a new on
 - Resource names created by tests (`test-pytest-*`, `test_pytest_*`) are not cleaned up between
   runs — LocalStack state resets when the container is recreated (`docker compose down -v`), not
   automatically per test run. If you add a lifecycle test, either tolerate `ResourceInUseException`
-  and treat it as success (see `create_sqs_queue` callers) or pick a unique name.
+  and treat it as success (as `create_dynamodb_table` and `create_kinesis_stream` in
+  `app/services/aws.py` do) or pick a unique name (e.g. a `uuid` suffix) and delete what you
+  create.
 - If you want the new service exposed in the Developer Portal UI (`docker/portal/`), that's a
   separate, manual step in `docker/portal/js/aws.js` and the relevant partial under
   `docker/portal/partials/` — it is not auto-generated from the FastAPI routes.

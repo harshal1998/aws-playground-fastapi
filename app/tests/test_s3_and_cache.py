@@ -31,10 +31,13 @@ ROW = {
 
 
 class FailingRedis:
-    """Redis client stub whose every call raises a connection error."""
+    """Redis client stub whose every call raises the given Redis error."""
+
+    def __init__(self, error: Exception | None = None):
+        self.error = error or aioredis.ConnectionError("Error connecting to redis:6379. Connection refused.")
 
     def _fail(self, *args, **kwargs):
-        raise aioredis.ConnectionError("Error connecting to redis:6379. Connection refused.")
+        raise self.error
 
     async def get(self, *args, **kwargs):
         self._fail()
@@ -92,6 +95,39 @@ def test_create_item_succeeds_when_cache_invalidation_fails():
     result = asyncio.run(items_service.create_item(StubConn(), FailingRedis(), item))
     assert result["id"] == 1
     assert result["name"] == ROW["name"]
+
+
+def test_redis_timeout_is_treated_as_cache_miss():
+    """Verify a Redis timeout (raised once socket_timeout expires) falls back to PostgreSQL."""
+    redis_timeout = aioredis.TimeoutError("Timeout reading from redis:6379")
+    result = asyncio.run(items_service.get_items(StubPool(), FailingRedis(redis_timeout), limit=5))
+    assert result["source"] == "database (PostgreSQL)"
+
+
+def test_unresponsive_redis_times_out_instead_of_stalling():
+    """Verify a real client with socket_timeout gives up on a Redis that accepts but never answers."""
+
+    async def scenario():
+        async def never_answer(reader, writer):
+            await reader.read()  # hold the connection open without replying
+
+        server = await asyncio.start_server(never_answer, "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        client = aioredis.from_url(
+            f"redis://127.0.0.1:{port}/0",
+            decode_responses=True,
+            socket_connect_timeout=0.5,
+            socket_timeout=0.5,
+        )
+        try:
+            # Without socket_timeout this would wait forever.
+            return await asyncio.wait_for(items_service.get_items(StubPool(), client, limit=5), timeout=5)
+        finally:
+            await client.aclose()
+            server.close()
+
+    result = asyncio.run(scenario())
+    assert result["source"] == "database (PostgreSQL)"
 
 
 # ------------------------------------------------------------------------------

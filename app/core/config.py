@@ -23,6 +23,10 @@ class Settings:
 
     # Redis Settings
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    # Short timeouts keep the best-effort cache from stalling requests when
+    # Redis accepts connections but never answers.
+    REDIS_SOCKET_CONNECT_TIMEOUT: float = float(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "1"))
+    REDIS_SOCKET_TIMEOUT: float = float(os.getenv("REDIS_SOCKET_TIMEOUT", "1"))
 
     # Mailpit SMTP Settings
     MAILPIT_HOST: str = os.getenv("MAILPIT_HOST", "localhost")

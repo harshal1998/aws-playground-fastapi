@@ -68,7 +68,7 @@
       <h3 class="modal-title">Insert Item into <span id="modal-item-table-name"></span></h3>
       <div class="form-group">
         <label class="form-label">JSON Document (Must include partition key: <span id="modal-item-key-label" class="mono-cell"></span>)</label>
-        <textarea id="new-dynamo-item-json" class="form-textarea" rows="8" placeholder='{\n  "id": "item_101",\n  "title": "My Custom Item",\n  "price": 49.99,\n  "active": true\n}'></textarea>
+        <textarea id="new-dynamo-item-json" class="form-textarea" rows="8" placeholder='{&#10;  "id": "item_101",&#10;  "title": "My Custom Item",&#10;  "price": 49.99,&#10;  "active": true&#10;}'></textarea>
       </div>
       <div class="modal-actions">
         <button class="ctrl-btn" onclick="closeModal('modal-dynamo-item')">Cancel</button>
@@ -120,7 +120,10 @@
       <h3 class="modal-title">⚡ Invoke Lambda: <span id="modal-invoke-fn-name" class="mono-cell" style="color: var(--accent-amber);"></span></h3>
       <div class="form-group">
         <label class="form-label">Invocation Payload (JSON)</label>
-        <textarea id="invoke-lambda-payload" class="form-textarea" rows="5" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">{\n  "action": "test_run",\n  "user_id": 42\n}</textarea>
+        <textarea id="invoke-lambda-payload" class="form-textarea" rows="5" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">{
+  "action": "test_run",
+  "user_id": 42
+}</textarea>
       </div>
       <div id="invoke-result-box" style="display: none; margin-bottom: 14px;">
         <label class="form-label">Execution Result:</label>
@@ -147,7 +150,11 @@
       </div>
       <div class="form-group">
         <label class="form-label">Event Detail (JSON)</label>
-        <textarea id="event-detail-json" class="form-textarea" rows="5" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">{\n  "order_id": 1001,\n  "amount": 199.50,\n  "status": "confirmed"\n}</textarea>
+        <textarea id="event-detail-json" class="form-textarea" rows="5" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">{
+  "order_id": 1001,
+  "amount": 199.50,
+  "status": "confirmed"
+}</textarea>
       </div>
       <div class="modal-actions">
         <button class="ctrl-btn" onclick="closeModal('modal-put-event')">Cancel</button>
@@ -185,7 +192,11 @@
       </div>
       <div class="form-group">
         <label class="form-label">Data Payload (JSON or String)</label>
-        <textarea id="kinesis-put-data" class="form-textarea" rows="5" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">{\n  "temp": 72.4,\n  "humidity": 45,\n  "timestamp": 1720000000\n}</textarea>
+        <textarea id="kinesis-put-data" class="form-textarea" rows="5" style="font-family: 'JetBrains Mono', monospace; font-size: 12px;">{
+  "temp": 72.4,
+  "humidity": 45,
+  "timestamp": 1720000000
+}</textarea>
       </div>
       <div class="modal-actions">
         <button class="ctrl-btn" onclick="closeModal('modal-kinesis-put')">Cancel</button>

@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import http.client
+import json
 import os
 from decimal import Decimal
 from urllib.parse import quote, urlsplit
@@ -222,3 +223,35 @@ def test_s3_upload_over_limit_returns_413():
 
     listing = requests.get(f"{API_URL}/s3/objects", timeout=10).json()
     assert "regression_too_large.bin" not in [obj["key"] for obj in listing["objects"]]
+
+
+def test_s3_upload_text_within_limit_succeeds():
+    """Verify a normal text document upload still works."""
+    key = "regression_text.txt"
+    response = requests.post(
+        f"{API_URL}/s3/upload-text", json={"filename": key, "content": "héllo"}, timeout=10
+    )
+    try:
+        assert response.status_code == 200
+        assert response.json()["size_bytes"] == len("héllo".encode("utf-8"))
+    finally:
+        _delete(key)
+
+
+def test_s3_upload_text_over_limit_returns_413():
+    """Verify text whose UTF-8 encoding exceeds S3_MAX_UPLOAD_BYTES is rejected with 413."""
+    # Hits the API directly, so nginx's client_max_body_size doesn't apply. The
+    # API reads the whole JSON body before rejecting, so there is no early-close
+    # race. "é" is 2 bytes in UTF-8: the string is under the limit in characters
+    # but over it once encoded.
+    content = "é" * (settings.S3_MAX_UPLOAD_BYTES // 2 + 1)
+    # ensure_ascii=False keeps the JSON body ~limit-sized instead of 3x ("é").
+    body = json.dumps({"filename": "regression_text_too_large.txt", "content": content}, ensure_ascii=False)
+    response = requests.post(
+        f"{API_URL}/s3/upload-text",
+        data=body.encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        timeout=10,
+    )
+    assert response.status_code == 413
+    assert "byte limit" in response.json()["detail"]

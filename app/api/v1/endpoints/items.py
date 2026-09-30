@@ -33,7 +33,7 @@ async def get_items(
     pool: DbPoolDep,
     redis_client: RedisDep,
     # Bounded so bad values 422 instead of failing in Postgres, and so the
-    # number of items:limit:* cache keys stays finite
+    # number of items:gen:{gen}:limit:* cache keys per generation stays finite
     limit: int = Query(10, ge=1, le=100),
 ):
     """READ with Redis Cache-Aside pattern."""

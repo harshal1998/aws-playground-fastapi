@@ -13,6 +13,14 @@ from prometheus_client import (
 )
 from starlette.middleware.base import BaseHTTPMiddleware
 
+# In multiprocess mode prometheus_client writes each worker's samples to
+# PROMETHEUS_MULTIPROC_DIR and fails if it is missing. compose.yml wipes and
+# recreates it before uvicorn forks; this only guards other entrypoints
+# (e.g. an overridden command). Never clean it here: workers share it.
+_MULTIPROC_DIR = os.environ.get("PROMETHEUS_MULTIPROC_DIR")
+if _MULTIPROC_DIR:
+    os.makedirs(_MULTIPROC_DIR, exist_ok=True)
+
 # Prometheus Metrics Definitions
 REQUEST_COUNT = Counter(
     "http_requests_total",
@@ -74,7 +82,7 @@ def get_metrics_response() -> Response:
     is set (see compose.yml), every worker writes its samples to that
     directory and the response aggregates all of them.
     """
-    if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
+    if _MULTIPROC_DIR:
         registry = CollectorRegistry()
         multiprocess.MultiProcessCollector(registry)
     else:

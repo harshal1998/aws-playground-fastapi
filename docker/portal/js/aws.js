@@ -170,7 +170,12 @@
           else if (btn.dataset.action === 'purge-sqs') purgeSQSQueue(btn.dataset.name);
         };
 
+        // Keep the user's queue selected across refreshes if it still exists.
+        const previousQueue = select.value;
         select.innerHTML = queues.map(q => `<option value="${escapeHtml(q.name)}">${escapeHtml(q.name)}</option>`).join('');
+        if (previousQueue && queues.some(q => q.name === previousQueue)) {
+          select.value = previousQueue;
+        }
       } catch (err) {
         if (cardCount) cardCount.innerText = 'Unavailable';
         tbody.innerHTML = errorRow(4, err.message);

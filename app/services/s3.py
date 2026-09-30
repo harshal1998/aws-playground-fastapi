@@ -8,6 +8,7 @@ from functools import cached_property
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
+from app.core.boto import BOTO_CLIENT_CONFIG
 from app.core.config import settings
 
 
@@ -37,6 +38,7 @@ class S3Service:
             aws_access_key_id=self.aws_access_key_id,
             aws_secret_access_key=self.aws_secret_access_key,
             region_name=self.region_name,
+            config=BOTO_CLIENT_CONFIG,
         )
 
     def ensure_bucket_exists(self) -> None:

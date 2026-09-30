@@ -13,6 +13,7 @@ from app.schemas.aws import (
     SQSMessageSend,
     SQSQueueCreate,
 )
+from app.services.aws import LOCALSTACK_HEALTH_ERRORS
 
 router = APIRouter()
 
@@ -20,14 +21,9 @@ router = APIRouter()
 @router.get("/health-raw")
 def get_aws_health_raw(aws_service: AWSServiceDep):
     """Proxies the raw LocalStack health JSON — avoids CORS when called from the browser."""
-    import json
-    import urllib.request
-    health_url = f"{aws_service.endpoint_url}/_localstack/health"
     try:
-        req = urllib.request.Request(health_url, headers={"User-Agent": "FastAPI-HealthProxy"})
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            return json.loads(resp.read().decode())
-    except Exception as e:
+        return aws_service.get_localstack_health()
+    except LOCALSTACK_HEALTH_ERRORS as e:
         raise HTTPException(status_code=502, detail=f"LocalStack unreachable: {e}") from e
 
 

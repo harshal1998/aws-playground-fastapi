@@ -3,8 +3,10 @@ Unified AWS Services Integration for LocalStack.
 Provides a class-based AWSService managing SQS, DynamoDB, Secrets Manager, Lambda, EventBridge, and Kinesis.
 """
 import base64
+import http.client
 import io
 import json
+import time
 import urllib.request
 import zipfile
 from decimal import Decimal
@@ -22,6 +24,11 @@ _SERIALIZER = TypeSerializer()
 _DESERIALIZER = TypeDeserializer()
 
 SQS_QUEUE_MISSING_CODES = frozenset({"QueueDoesNotExist", "AWS.SimpleQueueService.NonExistentQueue"})
+
+LOCALSTACK_HEALTH_TIMEOUT_SECONDS = 3
+# What get_localstack_health() raises when LocalStack is unreachable, times
+# out, drops the connection mid-response or doesn't return JSON.
+LOCALSTACK_HEALTH_ERRORS = (OSError, ValueError, http.client.HTTPException)
 
 LAMBDA_TIMEOUT_SECONDS = 15
 # Bounded polling for Lambda state transitions: at most ~20s per wait.
@@ -92,23 +99,32 @@ class AWSService:
     # --------------------------------------------------------------------------
     # 1. LocalStack Health & Status
     # --------------------------------------------------------------------------
+    def get_localstack_health(self) -> dict[str, Any]:
+        """Fetches the raw JSON from LocalStack's health endpoint.
+
+        Raises one of LOCALSTACK_HEALTH_ERRORS if it can't be fetched.
+        """
+        req = urllib.request.Request(
+            f"{self.endpoint_url}/_localstack/health", headers={"User-Agent": "FastAPI-Health"}
+        )
+        with urllib.request.urlopen(req, timeout=LOCALSTACK_HEALTH_TIMEOUT_SECONDS) as resp:
+            return json.loads(resp.read().decode())
+
     def get_localstack_status(self) -> dict[str, Any]:
-        """Fetches real-time status and active services from LocalStack health endpoint."""
-        health_url = f"{self.endpoint_url}/_localstack/health"
+        """Summarizes LocalStack's health: online/offline and its active services."""
         try:
-            req = urllib.request.Request(health_url, headers={"User-Agent": "FastAPI-Health"})
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                data = json.loads(resp.read().decode())
-                services = data.get("services", {})
-                active_services = [k for k, v in services.items() if v in ("available", "running")]
-                return {
-                    "status": "online",
-                    "version": data.get("version", "3.8.0"),
-                    "edition": data.get("edition", "community"),
-                    "active_services": sorted(active_services),
-                    "total_available": len(active_services),
-                }
-        except Exception as e:
+            data = self.get_localstack_health()
+            services = data.get("services", {})
+            active_services = [k for k, v in services.items() if v in ("available", "running")]
+            return {
+                "status": "online",
+                "version": data.get("version", "3.8.0"),
+                "edition": data.get("edition", "community"),
+                "active_services": sorted(active_services),
+                "total_available": len(active_services),
+            }
+        except (*LOCALSTACK_HEALTH_ERRORS, AttributeError) as e:
+            # AttributeError: the health JSON wasn't the expected object shape
             return {
                 "status": "offline",
                 "error": str(e),
@@ -563,7 +579,6 @@ class AWSService:
 
     def put_kinesis_record(self, stream_name: str, partition_key: str, data: str) -> dict[str, Any]:
         """Puts a data record into a Kinesis stream, waiting for ACTIVE state if newly created."""
-        import time
         for _ in range(10):
             try:
                 desc = self.kinesis.describe_stream_summary(StreamName=stream_name).get("StreamDescriptionSummary", {})
@@ -629,64 +644,3 @@ def get_aws_service() -> AWSService:
     if _aws_service is None:
         _aws_service = AWSService()
     return _aws_service
-
-
-# Module-level aliases for backwards compatibility
-def get_localstack_status() -> dict[str, Any]:
-    return get_aws_service().get_localstack_status()
-
-
-def list_sqs_queues() -> list[dict[str, Any]]:
-    return get_aws_service().list_sqs_queues()
-
-
-def create_sqs_queue(queue_name: str) -> dict[str, Any]:
-    return get_aws_service().create_sqs_queue(queue_name)
-
-
-def send_sqs_message(queue_name: str, message_body: str) -> dict[str, Any]:
-    return get_aws_service().send_sqs_message(queue_name, message_body)
-
-
-def receive_sqs_messages(queue_name: str, max_messages: int = 5) -> list[dict[str, Any]]:
-    return get_aws_service().receive_sqs_messages(queue_name, max_messages)
-
-
-def purge_sqs_queue(queue_name: str) -> dict[str, str]:
-    return get_aws_service().purge_sqs_queue(queue_name)
-
-
-def list_dynamodb_tables() -> list[dict[str, Any]]:
-    return get_aws_service().list_dynamodb_tables()
-
-
-def create_dynamodb_table(table_name: str, key_name: str = "id") -> dict[str, Any]:
-    return get_aws_service().create_dynamodb_table(table_name, key_name)
-
-
-def delete_dynamodb_table(table_name: str) -> dict[str, str]:
-    return get_aws_service().delete_dynamodb_table(table_name)
-
-
-def scan_dynamodb_items(table_name: str, limit: int = 50) -> list[dict[str, Any]]:
-    return get_aws_service().scan_dynamodb_items(table_name, limit)
-
-
-def put_dynamodb_item(table_name: str, item_dict: dict[str, Any]) -> dict[str, str]:
-    return get_aws_service().put_dynamodb_item(table_name, item_dict)
-
-
-def delete_dynamodb_item(table_name: str, key_name: str, key_value: str) -> dict[str, str]:
-    return get_aws_service().delete_dynamodb_item(table_name, key_name, key_value)
-
-
-def list_secrets() -> list[dict[str, Any]]:
-    return get_aws_service().list_secrets()
-
-
-def get_secret(secret_name: str) -> dict[str, Any]:
-    return get_aws_service().get_secret(secret_name)
-
-
-def create_or_update_secret(secret_name: str, secret_value: str) -> dict[str, str]:
-    return get_aws_service().create_or_update_secret(secret_name, secret_value)

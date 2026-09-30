@@ -34,6 +34,14 @@ LAMBDA_TIMEOUT_SECONDS = 15
 # Bounded polling for Lambda state transitions: at most ~20s per wait.
 LAMBDA_WAITER_CONFIG = {"Delay": 1, "MaxAttempts": 20}
 
+# Bound on GetRecords calls per shard in get_kinesis_records.
+KINESIS_MAX_READS_PER_SHARD = 5
+
+
+def _timestamp(value: Any) -> float:
+    """Sort key for an optional datetime (missing values sort first)."""
+    return value.timestamp() if hasattr(value, "timestamp") else 0.0
+
 
 def _paginate(client, operation: str, result_key: str, **kwargs) -> list[Any]:
     """Collects result_key from every page of a paginated boto3 list operation."""
@@ -583,23 +591,47 @@ class AWSService:
             "sequence_number": resp.get("SequenceNumber"),
         }
 
-    def get_kinesis_records(self, stream_name: str, limit: int = 20) -> list[dict[str, Any]]:
-        """Reads recent records from a Kinesis stream."""
-        desc = self.kinesis.describe_stream(StreamName=stream_name).get("StreamDescription", {})
-        shards = desc.get("Shards", [])
-        if not shards:
-            return []
-        shard_id = shards[0]["ShardId"]
-        iter_resp = self.kinesis.get_shard_iterator(
+    def _read_kinesis_shard(self, stream_name: str, shard_id: str, limit: int) -> list[dict[str, Any]]:
+        """Reads up to `limit` records of one shard from TRIM_HORIZON.
+
+        GetRecords can return an empty batch while records remain further
+        on (MillisBehindLatest > 0), so NextShardIterator is followed until
+        the shard is caught up or closed, for at most
+        KINESIS_MAX_READS_PER_SHARD calls.
+        """
+        shard_iter = self.kinesis.get_shard_iterator(
             StreamName=stream_name,
             ShardId=shard_id,
             ShardIteratorType="TRIM_HORIZON",
-        )
-        shard_iter = iter_resp.get("ShardIterator")
-        if not shard_iter:
-            return []
-        rec_resp = self.kinesis.get_records(ShardIterator=shard_iter, Limit=limit)
-        records = rec_resp.get("Records", [])
+        ).get("ShardIterator")
+        records: list[dict[str, Any]] = []
+        for _ in range(KINESIS_MAX_READS_PER_SHARD):
+            if not shard_iter or len(records) >= limit:
+                break
+            resp = self.kinesis.get_records(ShardIterator=shard_iter, Limit=limit - len(records))
+            batch = resp.get("Records", [])
+            records.extend(batch)
+            shard_iter = resp.get("NextShardIterator")
+            if not batch and not resp.get("MillisBehindLatest"):
+                break  # caught up with the tip of the shard
+        return records
+
+    def get_kinesis_records(self, stream_name: str, limit: int = 20) -> list[dict[str, Any]]:
+        """Reads the oldest retained records of a Kinesis stream, across all shards.
+
+        Every shard is read from TRIM_HORIZON (up to `limit` records each),
+        then the records are merged by arrival time and the first `limit`
+        are returned.
+        """
+        pages = self.kinesis.get_paginator("describe_stream").paginate(StreamName=stream_name)
+        shard_ids = [s["ShardId"] for page in pages for s in page.get("StreamDescription", {}).get("Shards", [])]
+        records = []
+        for index, shard_id in enumerate(shard_ids):
+            records.extend((index, r) for r in self._read_kinesis_shard(stream_name, shard_id, limit))
+        # Sequence numbers are only ordered within a shard, so merge by
+        # arrival time (ties keep shard order; sorted() is stable).
+        records.sort(key=lambda pair: (_timestamp(pair[1].get("ApproximateArrivalTimestamp")), pair[0]))
+        records = [r for _, r in records[:limit]]
         output = []
         for r in records:
             raw_data = r.get("Data", b"")

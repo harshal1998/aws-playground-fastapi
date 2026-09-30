@@ -812,7 +812,11 @@
     }
 
     function openPutEventModal(busName = 'default') {
-      document.getElementById('modal-put-event').classList.add('active');
+      const modal = document.getElementById('modal-put-event');
+      modal.dataset.bus = busName || 'default';
+      const busLabel = document.getElementById('modal-put-event-bus');
+      if (busLabel) busLabel.innerText = modal.dataset.bus;
+      modal.classList.add('active');
     }
 
     async function submitPutEvent() {
@@ -827,12 +831,13 @@
         return;
       }
 
+      const busName = document.getElementById('modal-put-event').dataset.bus || 'default';
       try {
         const data = await apiFetch('/api/aws/events/put-event', jsonRequest('POST', {
-          source, detail_type: detailType, detail, event_bus_name: 'default'
+          source, detail_type: detailType, detail, event_bus_name: busName
         }));
         closeModal('modal-put-event');
-        showToast(`Event published (ID: ${data.event_id || 'sent'})!`);
+        showToast(`Event published to ${busName} (ID: ${data.event_id || 'sent'})!`);
       } catch (err) {
         showToast(`Publish failed: ${err.message}`);
       }

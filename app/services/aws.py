@@ -15,6 +15,7 @@ import boto3
 from boto3.dynamodb.types import Binary, TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError, WaiterError
 
+from app.core.boto import BOTO_CLIENT_CONFIG
 from app.core.config import settings
 
 _SERIALIZER = TypeSerializer()
@@ -48,6 +49,7 @@ class AWSService:
             aws_access_key_id=self.aws_access_key_id,
             aws_secret_access_key=self.aws_secret_access_key,
             region_name=self.region_name,
+            config=BOTO_CLIENT_CONFIG,
         )
 
     # Cached boto3 clients

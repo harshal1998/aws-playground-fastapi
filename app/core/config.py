@@ -41,5 +41,10 @@ class Settings:
     # Keep in sync with client_max_body_size in docker/nginx/nginx.conf.
     S3_MAX_UPLOAD_BYTES: int = int(os.getenv("S3_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
 
+    # botocore client timeouts (seconds) and total attempts per call
+    AWS_CONNECT_TIMEOUT: float = float(os.getenv("AWS_CONNECT_TIMEOUT", "3"))
+    AWS_READ_TIMEOUT: float = float(os.getenv("AWS_READ_TIMEOUT", "30"))
+    AWS_MAX_ATTEMPTS: int = int(os.getenv("AWS_MAX_ATTEMPTS", "2"))
+
 
 settings = Settings()

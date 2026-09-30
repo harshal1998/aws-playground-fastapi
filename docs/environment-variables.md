@@ -58,6 +58,9 @@ default in every environment, including inside Docker.
 | `AWS_REGION` | `us-east-1` | no |
 | `S3_BUCKET_NAME` | `fastapi-bucket` | no |
 | `S3_MAX_UPLOAD_BYTES` | `10485760` (10 MiB) — cap for `POST /s3/upload` and `/s3/upload-text`; keep nginx's `client_max_body_size` in sync | no |
+| `AWS_CONNECT_TIMEOUT` | `3` (seconds, botocore connect timeout) | no |
+| `AWS_READ_TIMEOUT` | `30` (seconds, botocore read timeout) | no |
+| `AWS_MAX_ATTEMPTS` | `2` (total attempts per boto3 call, incl. the first) | no |
 
 **Practical implication:** if you run the API in Docker, `MAILPIT_HOST` and `AWS_ENDPOINT_URL` are
 always the Docker service names regardless of `.env` — you cannot change them via `.env` without

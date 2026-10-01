@@ -54,7 +54,7 @@ When the stack is running, all services are reachable from this machine only (po
 | **Developer Portal** | [http://localhost](http://localhost) | Interactive web portal for all tools |
 | **FastAPI Swagger Docs** | [http://localhost:8000/docs](http://localhost:8000/docs) | OpenAPI interactive documentation |
 | **Nginx API Gateway** | [http://localhost/api/](http://localhost/api/) | Proxied through Nginx (`/docs`, `/api/items`) |
-| **Grafana Dashboard** | [http://localhost:3000](http://localhost:3000) | `admin` / `admin` (Prometheus datasource preloaded) |
+| **Grafana Dashboard** | [http://localhost:3000](http://localhost:3000) | `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` from `.env` (`admin` / `admin` if unset; Prometheus datasource preloaded) |
 | **Prometheus Metrics** | [http://localhost:9090](http://localhost:9090) | Auto-scrapes `api:8000/metrics` every 5s |
 | **Locust Swarm UI** | [http://localhost:8089](http://localhost:8089) | Performance & load testing interface |
 | **Mailpit Web Inbox** | [http://localhost:8025](http://localhost:8025) | SMTP listening on port `1025` |
@@ -185,7 +185,7 @@ If you want to run the FastAPI app directly on your host machine (outside Docker
    ```powershell
    .\dev.ps1 run
    ```
-   *(This automatically stops the containerized `api` to free port 8000, routes connections to `localhost`, and starts Uvicorn with hot-reload. It assumes the default Postgres password `postgrespassword`; if you changed `POSTGRES_PASSWORD`, use the manual route below with `DATABASE_URL` set.)*
+   *(This automatically stops the containerized `api` to free port 8000, routes connections to `localhost`, and starts Uvicorn with hot-reload. It builds `DATABASE_URL` from `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` and `POSTGRES_PORT` in `.env` (compose defaults if unset), so a changed password just works.)*
 
    **Or run manually**:
    ```powershell
@@ -263,7 +263,7 @@ All AWS services are 100% offline and run locally in Docker on port `4566`:
 * The `api` container runs 4 Uvicorn workers in Prometheus multiprocess mode (`PROMETHEUS_MULTIPROC_DIR`), so `/metrics` reports all workers combined.
 * Prometheus scrapes `/metrics` automatically every 5 seconds.
 * Check Prometheus graphs: **[http://localhost:9090](http://localhost:9090)**
-* Open Grafana: **[http://localhost:3000](http://localhost:3000)** (Login: `admin` / `admin`). The Prometheus data source is provisioned; dashboards are not, so create your own.
+* Open Grafana: **[http://localhost:3000](http://localhost:3000)** (Login: `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` from `.env`, `admin` / `admin` if unset; `.\dev.ps1 urls` prints yours). The Prometheus data source is provisioned; dashboards are not, so create your own.
 
 ---
 

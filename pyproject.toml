@@ -2,5 +2,13 @@
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
+select = ["E", "F", "I", "ASYNC", "B", "UP", "S"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest relies on bare asserts.
+"app/tests/**" = ["S101"]
+# Temporary: #53 rewrites this file with request timeouts; drop this then.
+"app/tests/test_api.py" = ["S113"]
+# Locust picks random payloads for load generation, not for security.
+"docker/locust/locustfile.py" = ["S311"]

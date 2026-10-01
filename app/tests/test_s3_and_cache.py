@@ -236,7 +236,7 @@ def test_s3_upload_text_within_limit_succeeds():
     )
     try:
         assert response.status_code == 200
-        assert response.json()["size_bytes"] == len("héllo".encode("utf-8"))
+        assert response.json()["size_bytes"] == len("héllo".encode())
     finally:
         _delete(key)
 

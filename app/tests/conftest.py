@@ -40,8 +40,8 @@ class ApiClient:
         self.timeout = timeout
 
     def request(self, method: str, path: str, **kwargs) -> requests.Response:
-        kwargs.setdefault("timeout", self.timeout)
-        return requests.request(method, f"{self.base_url}{path}", **kwargs)
+        timeout = kwargs.pop("timeout", self.timeout)
+        return requests.request(method, f"{self.base_url}{path}", timeout=timeout, **kwargs)
 
     def get(self, path: str, **kwargs) -> requests.Response:
         return self.request("GET", path, **kwargs)

@@ -16,7 +16,10 @@ function Get-EnvSetting {
             Where-Object { $_ -match "^\s*$([regex]::Escape($Name))\s*=" } |
             Select-Object -Last 1
         if ($line) {
-            $value = ($line -split "=", 2)[1].Trim().Trim('"').Trim("'")
+            $value = ($line -split "=", 2)[1].Trim()
+            if ($value -match '^"([^"]*)"') { $value = $Matches[1] }
+            elseif ($value -match "^'([^']*)'") { $value = $Matches[1] }
+            else { $value = ($value -replace '\s+#.*$', '').Trim() }  # unquoted: " # comment" ends the value
             if ($value) { return $value }
         }
     }

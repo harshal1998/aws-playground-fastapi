@@ -88,6 +88,31 @@ def test_redis_cache_behavior(api):
     assert res2.json()["items"] == res1.json()["items"]
 
 
+def test_item_create_invalidates_cached_list(api):
+    """Verify a create makes the cached list stale: the next read comes from PostgreSQL and shows the item."""
+    params = {"limit": 100}
+    api.get("/items", params=params)  # populate the cache for this generation
+    cached = api.get("/items", params=params)
+    assert cached.status_code == 200
+    assert cached.json()["source"] == "cache (Redis)"
+
+    name = unique_name("cache-invalidation-item")
+    created = api.post("/items", json={"name": name, "price": 3.25})
+    assert created.status_code == 201, created.text
+    item_id = created.json()["item"]["id"]
+
+    after = api.get("/items", params=params)
+    assert after.status_code == 200
+    assert after.json()["source"] == "database (PostgreSQL)"
+    # Newest first, so the new item is in the first page whatever the table holds.
+    assert after.json()["items"][0]["id"] == item_id
+    assert after.json()["items"][0]["name"] == name
+
+    again = api.get("/items", params=params)
+    assert again.json()["source"] == "cache (Redis)"
+    assert again.json()["items"][0]["id"] == item_id
+
+
 def test_item_not_found(api):
     """Verify requesting a non-existent item ID returns 404."""
     response = api.get("/items/2147483647")
@@ -114,6 +139,29 @@ def test_s3_upload_sample_and_list(api, s3_key):
     assert listing.status_code == 200
     assert listing.json()["bucket"] == "fastapi-bucket"
     assert key in [obj["key"] for obj in listing.json()["objects"]]
+
+
+def test_s3_download_and_delete_round_trip(api, s3_key):
+    """Verify an uploaded object downloads intact, then is gone (404) after delete."""
+    key = s3_key("round-trip.txt")
+    content = f"round trip {key}".encode()
+    upload = api.post(
+        "/s3/upload", params={"filename": key}, data=content, headers={"Content-Type": "text/plain"}
+    )
+    assert upload.status_code == 200, upload.text
+
+    download = api.get("/s3/file", params={"key": key})
+    assert download.status_code == 200
+    assert download.content == content
+    assert download.headers["Content-Type"].startswith("text/plain")
+
+    deleted = api.delete("/s3/file", params={"key": key})
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json() == {"status": "deleted", "key": key}
+
+    assert api.get("/s3/file", params={"key": key}).status_code == 404
+    listing = api.get("/s3/objects").json()
+    assert key not in [obj["key"] for obj in listing["objects"]]
 
 
 # ------------------------------------------------------------------------------
@@ -186,6 +234,26 @@ def test_aws_dynamodb_lifecycle(api, table_name):
     assert api.get("/aws/dynamodb/items", params={"table_name": table_name}).json()["items"] == []
 
 
+def test_aws_secrets_lifecycle(api, secret_name):
+    """Verify creating, reading, updating and listing a Secrets Manager secret."""
+    created = api.post("/aws/secrets", json={"name": secret_name, "value": "v1"})
+    assert created.status_code == 200, created.text
+    assert created.json() == {"status": "created", "name": secret_name}
+
+    got = api.get(f"/aws/secrets/{secret_name}")
+    assert got.status_code == 200, got.text
+    assert got.json() == {"name": secret_name, "value": "v1"}
+
+    updated = api.post("/aws/secrets", json={"name": secret_name, "value": "v2"})
+    assert updated.status_code == 200, updated.text
+    assert updated.json() == {"status": "updated", "name": secret_name}
+    assert api.get(f"/aws/secrets/{secret_name}").json()["value"] == "v2"
+
+    listed = api.get("/aws/secrets")
+    assert listed.status_code == 200
+    assert secret_name in [s["name"] for s in listed.json()["secrets"]]
+
+
 def test_aws_eventbridge_lifecycle(api):
     """Verify listing event buses and publishing an event."""
     buses_res = api.get("/aws/events/buses")
@@ -255,3 +323,37 @@ def test_aws_lambda_lifecycle(api, function_name, deploy_lambda, invoke_lambda):
     while any(f["name"] == function_name for f in api.get("/aws/lambda/functions").json()["functions"]):
         assert time.monotonic() < deadline, "deleted function still listed"
         time.sleep(1)
+
+
+# ------------------------------------------------------------------------------
+# Not-found errors not covered elsewhere (see test_backend_errors_cache.py for
+# SQS, secrets, DynamoDB scan, Lambda invoke and S3 download)
+# ------------------------------------------------------------------------------
+
+
+def test_delete_unknown_dynamodb_table_returns_404(api):
+    """Verify deleting a table that does not exist is a 404."""
+    res = api.delete("/aws/dynamodb/tables", params={"table_name": unique_name("missing_table")})
+    assert res.status_code == 404, res.text
+
+
+def test_delete_unknown_lambda_function_returns_404(api):
+    """Verify deleting a function that does not exist is a 404."""
+    res = api.delete("/aws/lambda/functions", params={"name": unique_name("missing-fn")})
+    assert res.status_code == 404, res.text
+
+
+def test_put_record_to_unknown_kinesis_stream_returns_404(api):
+    """Verify writing to a stream that does not exist is a 404."""
+    res = api.post(
+        "/aws/kinesis/records",
+        json={"stream_name": unique_name("missing-stream"), "partition_key": "pk", "data": "x"},
+        timeout=60,
+    )
+    assert res.status_code == 404, res.text
+
+
+def test_purge_unknown_sqs_queue_returns_404(api):
+    """Verify purging a queue that does not exist is a 404."""
+    res = api.delete("/aws/sqs/queues", params={"queue_name": unique_name("missing-queue")})
+    assert res.status_code == 404, res.text

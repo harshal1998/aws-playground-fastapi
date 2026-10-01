@@ -331,20 +331,8 @@ def test_create_item_bumps_generation_without_scanning():
     assert [it["name"] for it in after["items"]] == ["second", "first"]
 
 
-def test_created_item_shows_up_in_cached_list():
-    """Verify GET /items reflects a new item even when the list was just cached."""
-    params = {"limit": 100}
-    requests.get(f"{API_URL}/items", params=params, timeout=TIMEOUT)
-    cached = requests.get(f"{API_URL}/items", params=params, timeout=TIMEOUT)
-    assert cached.status_code == 200
-
-    name = _name("gen-cache-item")
-    created = requests.post(f"{API_URL}/items", json={"name": name, "price": 2.5}, timeout=TIMEOUT)
-    assert created.status_code == 201, created.text
-
-    after = requests.get(f"{API_URL}/items", params=params, timeout=TIMEOUT)
-    assert after.status_code == 200
-    assert name in [it["name"] for it in after.json()["items"]]
+# The live list -> create -> list check (including the cache/database source
+# switch) is test_item_create_invalidates_cached_list in test_api.py.
 
 
 # ------------------------------------------------------------------------------

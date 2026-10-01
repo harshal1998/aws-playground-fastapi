@@ -327,7 +327,7 @@ docker compose run --rm test
 
 Two workflows in `.github/workflows/` automate quality checks and image publishing:
 
-- **`ci.yml`** — runs on every PR into `develop` (and on push to `develop`):
+- **`ci.yml`** — runs on every PR, whatever its base branch (and on push to `develop`); a new push to a PR cancels its older run:
   - `lint`: `ruff check .` (config in `pyproject.toml`)
   - `integration-test`: builds the API image, brings up `db`/`redis`/`localstack`/`mailpit`/`api` via Docker Compose (the `api` container applies Alembic migrations itself on startup, gated by its healthcheck), then runs the `app/tests/` pytest suite against the live stack
 - **`cd.yml`** — runs after `ci.yml` succeeds for a push to `develop` in this repository (never for PR runs, including fork PRs from a branch named `develop`): builds the `docker/Dockerfile` image and pushes it to GitHub Container Registry as `ghcr.io/<owner>/<repo>:latest` and `:<commit-sha>`

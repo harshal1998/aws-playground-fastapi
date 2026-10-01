@@ -1,30 +1,49 @@
-import os
+"""
+Integration tests against the live stack at API_URL.
+
+Every request has a timeout (via the `api` fixture), every AWS/S3 resource
+gets a unique name per run and is removed in fixture teardown, and no test
+assumes the items table starts empty, so the suite can be rerun against the
+same stack.
+"""
 import time
 
-import requests
+from app.tests.conftest import unique_name
 
-API_URL = os.getenv("API_URL", "http://localhost:8000")
+# ------------------------------------------------------------------------------
+# Root / metrics
+# ------------------------------------------------------------------------------
 
 
-def test_root_endpoint():
+def test_root_endpoint(api):
     """Verify the root health check endpoint returns 200 and expected payload."""
-    response = requests.get(f"{API_URL}/")
+    response = api.get("/")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "online"
     assert "container_id" in data
 
 
-def test_create_and_read_item():
+def test_prometheus_metrics(api):
+    """Verify that the Prometheus /metrics endpoint is exposed and functioning."""
+    response = api.get("/metrics")
+    assert response.status_code == 200
+    assert (
+        "http_requests_total" in response.text
+        or "python_gc_objects_collected_total" in response.text
+    )
+
+
+# ------------------------------------------------------------------------------
+# Items (PostgreSQL + Redis cache)
+# ------------------------------------------------------------------------------
+
+
+def test_create_and_read_item(api):
     """Verify creating an item in DB and retrieving it."""
-    # 1. Create item
-    payload = {
-        "name": "Integration Test Keyboard",
-        "price": 89.99,
-        "is_offer": True,
-    }
-    create_res = requests.post(f"{API_URL}/items", json=payload)
-    assert create_res.status_code == 201
+    payload = {"name": unique_name("Integration Keyboard"), "price": 89.99, "is_offer": True}
+    create_res = api.post("/items", json=payload)
+    assert create_res.status_code == 201, create_res.text
     created_data = create_res.json()
     assert created_data["status"] == "created"
     item = created_data["item"]
@@ -33,158 +52,148 @@ def test_create_and_read_item():
     assert item["is_offer"] is True
     item_id = item["id"]
 
-    # 2. Read single item by ID
-    get_res = requests.get(f"{API_URL}/items/{item_id}")
+    get_res = api.get(f"/items/{item_id}")
     assert get_res.status_code == 200
     single_item = get_res.json()
     assert single_item["id"] == item_id
     assert single_item["name"] == payload["name"]
 
 
-def test_create_item_rejects_non_positive_price():
+def test_create_item_rejects_non_positive_price(api):
     """Verify creating an item with a zero or negative price returns 422."""
     for bad_price in (0, -10.5):
         payload = {"name": "Invalid Price Item", "price": bad_price, "is_offer": False}
-        response = requests.post(f"{API_URL}/items", json=payload)
-        assert response.status_code == 422
+        response = api.post("/items", json=payload)
+        assert response.status_code == 422, bad_price
 
 
-def test_get_items_list():
+def test_get_items_list(api):
     """Verify the items listing endpoint returns a valid list."""
-    response = requests.get(f"{API_URL}/items?limit=5")
+    response = api.get("/items", params={"limit": 5})
     assert response.status_code == 200
     data = response.json()
-    assert "items" in data
-    assert "count" in data
     assert isinstance(data["items"], list)
+    assert data["count"] == len(data["items"])
     assert len(data["items"]) <= 5
 
 
-def test_redis_cache_behavior():
+def test_redis_cache_behavior(api):
     """Verify that repeating a query hits the Redis cache."""
-    # First request: populates cache
-    res1 = requests.get(f"{API_URL}/items?limit=3")
+    res1 = api.get("/items", params={"limit": 3})
     assert res1.status_code == 200
 
-    # Second request: must hit cache
-    res2 = requests.get(f"{API_URL}/items?limit=3")
+    res2 = api.get("/items", params={"limit": 3})
     assert res2.status_code == 200
     assert res2.json()["source"] == "cache (Redis)"
+    assert res2.json()["items"] == res1.json()["items"]
 
 
-def test_prometheus_metrics():
-    """Verify that the Prometheus /metrics endpoint is exposed and functioning."""
-    response = requests.get(f"{API_URL}/metrics")
-    assert response.status_code == 200
-    assert (
-        "http_requests_total" in response.text
-        or "python_gc_objects_collected_total" in response.text
-    )
-
-
-def test_s3_upload_localstack():
-    """Verify uploading a sample file to LocalStack S3."""
-    response = requests.post(f"{API_URL}/s3/upload-sample?filename=test_doc.txt")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "success"
-    assert data["bucket"] == "fastapi-bucket"
-    assert data["key"] == "test_doc.txt"
-
-
-def test_s3_list_objects():
-    """Verify listing objects from LocalStack S3."""
-    response = requests.get(f"{API_URL}/s3/objects")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["bucket"] == "fastapi-bucket"
-    assert "objects" in data
-    assert isinstance(data["objects"], list)
-
-
-def test_item_not_found():
+def test_item_not_found(api):
     """Verify requesting a non-existent item ID returns 404."""
-    response = requests.get(f"{API_URL}/items/999999999")
+    response = api.get("/items/2147483647")
     assert response.status_code == 404
     assert response.json()["detail"] == "Item not found"
 
 
-def test_aws_status():
+# ------------------------------------------------------------------------------
+# S3
+# ------------------------------------------------------------------------------
+
+
+def test_s3_upload_sample_and_list(api, s3_key):
+    """Verify uploading the sample document to LocalStack S3 and seeing it in the listing."""
+    key = s3_key("sample.txt")
+    response = api.post("/s3/upload-sample", params={"filename": key})
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["bucket"] == "fastapi-bucket"
+    assert data["key"] == key
+
+    listing = api.get("/s3/objects")
+    assert listing.status_code == 200
+    assert listing.json()["bucket"] == "fastapi-bucket"
+    assert key in [obj["key"] for obj in listing.json()["objects"]]
+
+
+# ------------------------------------------------------------------------------
+# AWS services (LocalStack)
+# ------------------------------------------------------------------------------
+
+
+def test_aws_status(api):
     """Verify LocalStack AWS health status endpoint."""
-    response = requests.get(f"{API_URL}/aws/status")
+    response = api.get("/aws/status")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "online"
     assert "s3" in data["active_services"]
 
 
-def test_aws_sqs_lifecycle():
+def test_aws_sqs_lifecycle(api, queue_name):
     """Verify creating an SQS queue and sending/receiving a message."""
-    # 1. Create queue
-    q_res = requests.post(f"{API_URL}/aws/sqs/queues", json={"name": "test-pytest-queue"})
-    assert q_res.status_code == 200
+    q_res = api.post("/aws/sqs/queues", json={"name": queue_name})
+    assert q_res.status_code == 200, q_res.text
 
-    # 2. Send message
-    send_res = requests.post(
-        f"{API_URL}/aws/sqs/messages",
-        json={"queue_name": "test-pytest-queue", "message_body": "hello pytest"},
-    )
-    assert send_res.status_code == 200
+    listed = api.get("/aws/sqs/queues")
+    assert listed.status_code == 200
+    assert queue_name in [q["name"] for q in listed.json()["queues"]]
 
-    # 3. Receive message
-    rec_res = requests.get(f"{API_URL}/aws/sqs/messages?queue_name=test-pytest-queue")
-    assert rec_res.status_code == 200
-    msgs = rec_res.json().get("messages", [])
-    assert len(msgs) > 0
-    assert msgs[0]["body"] == "hello pytest"
+    send_res = api.post("/aws/sqs/messages", json={"queue_name": queue_name, "message_body": "hello pytest"})
+    assert send_res.status_code == 200, send_res.text
+
+    # Each receive long-polls for 1 s; poll a few times rather than relying on
+    # the first receive returning the message.
+    bodies = []
+    for _ in range(5):
+        rec_res = api.get("/aws/sqs/messages", params={"queue_name": queue_name})
+        assert rec_res.status_code == 200, rec_res.text
+        bodies += [m["body"] for m in rec_res.json()["messages"]]
+        if bodies:
+            break
+    assert bodies == ["hello pytest"]
 
 
-def test_aws_dynamodb_lifecycle():
-    """Verify creating a DynamoDB table and scanning items."""
-    # Create table
-    create_res = requests.post(
-        f"{API_URL}/aws/dynamodb/tables",
-        json={"table_name": "test_pytest_table", "key_name": "id"},
-    )
-    assert create_res.status_code == 200
+def test_aws_dynamodb_lifecycle(api, table_name):
+    """Verify creating a DynamoDB table, putting, updating and scanning items."""
+    create_res = api.post("/aws/dynamodb/tables", json={"table_name": table_name, "key_name": "id"})
+    assert create_res.status_code == 200, create_res.text
+    assert create_res.json()["status"] == "created"
 
-    # Put item
-    put_res = requests.post(
-        f"{API_URL}/aws/dynamodb/items",
-        json={"table_name": "test_pytest_table", "item": {"id": "1", "name": "Item One"}},
-    )
-    assert put_res.status_code == 200
+    put_res = api.post("/aws/dynamodb/items", json={"table_name": table_name, "item": {"id": "1", "name": "Item One"}})
+    assert put_res.status_code == 200, put_res.text
 
-    # Scan items
-    scan_res = requests.get(f"{API_URL}/aws/dynamodb/items?table_name=test_pytest_table")
+    scan_res = api.get("/aws/dynamodb/items", params={"table_name": table_name})
     assert scan_res.status_code == 200
-    items = scan_res.json().get("items", [])
-    assert len(items) > 0
+    assert scan_res.json()["items"] == [{"id": "1", "name": "Item One"}]
 
-    # Edit/Update item via PUT
-    update_res = requests.put(
-        f"{API_URL}/aws/dynamodb/items",
-        json={"table_name": "test_pytest_table", "item": {"id": "1", "name": "Item One Updated", "price": 99.99}},
+    update_res = api.put(
+        "/aws/dynamodb/items",
+        json={"table_name": table_name, "item": {"id": "1", "name": "Item One Updated", "price": 99.99}},
     )
-    assert update_res.status_code == 200
+    assert update_res.status_code == 200, update_res.text
 
-    # Verify updated item
-    scan_updated = requests.get(f"{API_URL}/aws/dynamodb/items?table_name=test_pytest_table")
+    scan_updated = api.get("/aws/dynamodb/items", params={"table_name": table_name})
     assert scan_updated.status_code == 200
-    updated_item = next(it for it in scan_updated.json().get("items", []) if str(it.get("id")) == "1")
+    updated_item = next(it for it in scan_updated.json()["items"] if str(it.get("id")) == "1")
     assert updated_item["name"] == "Item One Updated"
     assert updated_item["price"] == 99.99
 
+    delete_res = api.delete(
+        "/aws/dynamodb/items", params={"table_name": table_name, "key_name": "id", "key_value": "1"}
+    )
+    assert delete_res.status_code == 200, delete_res.text
+    assert api.get("/aws/dynamodb/items", params={"table_name": table_name}).json()["items"] == []
 
-def test_aws_eventbridge_lifecycle():
+
+def test_aws_eventbridge_lifecycle(api):
     """Verify listing event buses and publishing an event."""
-    buses_res = requests.get(f"{API_URL}/aws/events/buses")
+    buses_res = api.get("/aws/events/buses")
     assert buses_res.status_code == 200
-    buses = buses_res.json().get("buses", [])
-    assert any(b["name"] == "default" for b in buses)
+    assert any(b["name"] == "default" for b in buses_res.json()["buses"])
 
-    put_res = requests.post(
-        f"{API_URL}/aws/events/put-event",
+    put_res = api.post(
+        "/aws/events/put-event",
         json={
             "source": "pytest.test",
             "detail_type": "TestRun",
@@ -192,62 +201,57 @@ def test_aws_eventbridge_lifecycle():
             "event_bus_name": "default",
         },
     )
-    assert put_res.status_code == 200
+    assert put_res.status_code == 200, put_res.text
     assert put_res.json()["status"] == "published"
 
 
-def test_aws_kinesis_lifecycle():
-    """Verify creating a Kinesis stream, putting a record, and listing streams."""
-    stream_name = "test-pytest-stream"
-    create_res = requests.post(
-        f"{API_URL}/aws/kinesis/streams",
-        json={"stream_name": stream_name, "shard_count": 1},
-    )
-    assert create_res.status_code == 200
+def test_aws_kinesis_lifecycle(api, stream_name):
+    """Verify creating a Kinesis stream, putting a record, listing streams and reading it back."""
+    create_res = api.post("/aws/kinesis/streams", json={"stream_name": stream_name, "shard_count": 1})
+    assert create_res.status_code == 200, create_res.text
 
-    list_res = requests.get(f"{API_URL}/aws/kinesis/streams")
+    list_res = api.get("/aws/kinesis/streams")
     assert list_res.status_code == 200
-    streams = list_res.json().get("streams", [])
-    assert any(s["name"] == stream_name for s in streams)
+    assert any(s["name"] == stream_name for s in list_res.json()["streams"])
 
-    put_res = requests.post(
-        f"{API_URL}/aws/kinesis/records",
+    # put_kinesis_record waits for the new stream to become ACTIVE.
+    put_res = api.post(
+        "/aws/kinesis/records",
         json={"stream_name": stream_name, "partition_key": "part_1", "data": "kinesis-test-data"},
+        timeout=60,
     )
-    assert put_res.status_code == 200
+    assert put_res.status_code == 200, put_res.text
     assert put_res.json()["status"] == "success"
 
+    read_res = api.get("/aws/kinesis/records", params={"stream_name": stream_name})
+    assert read_res.status_code == 200, read_res.text
+    assert "kinesis-test-data" in [r["data"] for r in read_res.json()["records"]]
 
-def test_aws_lambda_lifecycle():
-    """Verify creating, listing, and invoking a Lambda function."""
-    fn_name = "pytest_demo_fn"
-    create_res = requests.post(
-        f"{API_URL}/aws/lambda/functions",
-        json={
-            "name": fn_name,
-            "code": "def lambda_handler(event, context):\n    return {'status': 'ok', 'msg': 'hello lambda', 'received': event}\n",
-        },
+
+def test_aws_lambda_lifecycle(api, function_name, deploy_lambda, invoke_lambda):
+    """Verify creating, listing, invoking and deleting a Lambda function."""
+    create_res = deploy_lambda(
+        function_name,
+        "def lambda_handler(event, context):\n    return {'status': 'ok', 'msg': 'hello lambda', 'received': event}\n",
     )
-    assert create_res.status_code == 200
+    assert create_res.status_code == 200, create_res.text
+    assert create_res.json()["status"] == "created"
 
-    list_res = requests.get(f"{API_URL}/aws/lambda/functions")
+    list_res = api.get("/aws/lambda/functions")
     assert list_res.status_code == 200
-    fns = list_res.json().get("functions", [])
-    assert any(f["name"] == fn_name for f in fns)
+    assert any(f["name"] == function_name for f in list_res.json()["functions"])
 
-    # LocalStack takes a moment to move a freshly created function out of
-    # "Pending" state, so retry briefly instead of failing on a cold invoke.
-    for attempt in range(5):
-        invoke_res = requests.post(
-            f"{API_URL}/aws/lambda/invoke",
-            json={"name": fn_name, "payload": {"user": "test_runner"}},
-        )
-        if invoke_res.status_code == 200 or attempt == 4:
-            break
-        time.sleep(2)
-    assert invoke_res.status_code == 200
+    invoke_res = invoke_lambda(function_name, {"user": "test_runner"})
+    assert invoke_res.status_code == 200, invoke_res.text
     data = invoke_res.json()
     assert data["executed"] is True
     assert data["result"]["status"] == "ok"
     assert data["result"]["received"]["user"] == "test_runner"
 
+    deleted = api.delete("/aws/lambda/functions", params={"name": function_name})
+    assert deleted.status_code == 200, deleted.text
+    # Deletion may take a moment to show up in LocalStack's listing.
+    deadline = time.monotonic() + 15
+    while any(f["name"] == function_name for f in api.get("/aws/lambda/functions").json()["functions"]):
+        assert time.monotonic() < deadline, "deleted function still listed"
+        time.sleep(1)

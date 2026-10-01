@@ -1,5 +1,5 @@
-# Development / test tooling (lint, integration tests, load test script).
-# Not installed in the runtime image. requirements-dev.txt is the lock
+# Development / test tooling (lint, unit and integration tests, load test
+# script). Not installed in the runtime image. requirements-dev.txt is the lock
 # generated from this file; it is constrained to the runtime lock so shared
 # transitive deps (e.g. urllib3) resolve to the same versions. Regenerate it
 # after requirements.txt (Git Bash / Linux / macOS):
@@ -10,3 +10,6 @@
 pytest==9.1.1
 requests==2.34.2
 ruff==0.16.9
+# Unit tests (app/tests/unit): in-memory Redis and AWS, no Docker or network
+fakeredis==2.38.0
+moto==5.2.3

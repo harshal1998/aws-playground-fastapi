@@ -1,4 +1,4 @@
-from typing import Annotated, List
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
@@ -43,5 +43,5 @@ class ItemCreateResponse(BaseModel):
 class ItemsListResponse(BaseModel):
     source: str
     count: int
-    items: List[ItemResponse]
+    items: list[ItemResponse]
     container_id: str

@@ -49,7 +49,7 @@ class Settings(BaseSettings):
 
     # Database Settings
     POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = "postgrespassword"
+    POSTGRES_PASSWORD: str = "postgrespassword"  # noqa: S105  # local compose default, overridden by .env
     POSTGRES_DB: str = "appdb"
     # Defaults to a localhost DSN built from the POSTGRES_* values above.
     DATABASE_URL: str = ""
@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     # LocalStack / AWS S3 Settings
     AWS_ENDPOINT_URL: str = "http://localhost:4566"
     AWS_ACCESS_KEY_ID: str = "test"
-    AWS_SECRET_ACCESS_KEY: str = "test"
+    AWS_SECRET_ACCESS_KEY: str = "test"  # noqa: S105  # LocalStack dummy credential
     AWS_REGION: str = "us-east-1"
     S3_BUCKET_NAME: str = "fastapi-bucket"
     # Keep in sync with client_max_body_size in docker/nginx/nginx.conf.

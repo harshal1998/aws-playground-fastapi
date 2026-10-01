@@ -9,6 +9,7 @@ API_URL = os.getenv("API_URL", "http://localhost:8000")
 # can take longer than a plain request on a cold LocalStack.
 LAMBDA_DEPLOY_TIMEOUT = 60
 LAMBDA_INVOKE_TIMEOUT = 30
+REQUEST_TIMEOUT = 30
 
 
 def _deploy_lambda(name: str, code: str) -> requests.Response:
@@ -85,6 +86,7 @@ def test_aws_dynamodb_native_types_round_trip():
     create_res = requests.post(
         f"{API_URL}/aws/dynamodb/tables",
         json={"table_name": table, "key_name": "id"},
+        timeout=REQUEST_TIMEOUT,
     )
     assert create_res.status_code == 200
 
@@ -102,10 +104,11 @@ def test_aws_dynamodb_native_types_round_trip():
     put_res = requests.post(
         f"{API_URL}/aws/dynamodb/items",
         json={"table_name": table, "item": item},
+        timeout=REQUEST_TIMEOUT,
     )
     assert put_res.status_code == 200, put_res.text
 
-    scan_res = requests.get(f"{API_URL}/aws/dynamodb/items", params={"table_name": table})
+    scan_res = requests.get(f"{API_URL}/aws/dynamodb/items", params={"table_name": table}, timeout=REQUEST_TIMEOUT)
     assert scan_res.status_code == 200, scan_res.text
     stored = next(it for it in scan_res.json()["items"] if it.get("id") == "native-1")
 
@@ -118,7 +121,7 @@ def test_aws_dynamodb_native_types_round_trip():
     assert stored["active"] is True
     assert stored["archived"] is False
 
-    requests.delete(f"{API_URL}/aws/dynamodb/tables", params={"table_name": table})
+    requests.delete(f"{API_URL}/aws/dynamodb/tables", params={"table_name": table}, timeout=REQUEST_TIMEOUT)
 
 
 def test_aws_dynamodb_scan_missing_table_reports_error():
@@ -126,5 +129,6 @@ def test_aws_dynamodb_scan_missing_table_reports_error():
     scan_res = requests.get(
         f"{API_URL}/aws/dynamodb/items",
         params={"table_name": "test_pytest_table_that_does_not_exist"},
+        timeout=REQUEST_TIMEOUT,
     )
     assert scan_res.status_code == 404

@@ -99,10 +99,11 @@ class AWSService:
 
         Raises one of LOCALSTACK_HEALTH_ERRORS if it can't be fetched.
         """
-        req = urllib.request.Request(
+        # endpoint_url is the operator-set AWS_ENDPOINT_URL (http/https), not user input.
+        req = urllib.request.Request(  # noqa: S310
             f"{self.endpoint_url}/_localstack/health", headers={"User-Agent": "FastAPI-Health"}
         )
-        with urllib.request.urlopen(req, timeout=LOCALSTACK_HEALTH_TIMEOUT_SECONDS) as resp:
+        with urllib.request.urlopen(req, timeout=LOCALSTACK_HEALTH_TIMEOUT_SECONDS) as resp:  # noqa: S310
             return json.loads(resp.read().decode())
 
     def get_localstack_status(self) -> dict[str, Any]:

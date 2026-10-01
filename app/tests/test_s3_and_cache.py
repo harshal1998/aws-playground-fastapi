@@ -3,6 +3,7 @@ import datetime
 import http.client
 import json
 import os
+import uuid
 from decimal import Decimal
 from urllib.parse import quote, urlsplit
 
@@ -153,15 +154,20 @@ def _delete(key: str) -> None:
     requests.delete(f"{API_URL}/s3/file", params={"key": key}, timeout=10)
 
 
+def _key(name: str) -> str:
+    """Unique key ending in name, so reruns never see a previous run's object."""
+    return f"pytest-{uuid.uuid4().hex[:10]}-{name}"
+
+
 def test_s3_download_is_attachment_with_nosniff():
     """Verify an uploaded HTML file is downloaded, not rendered on the portal origin."""
-    key = "regression_xss.html"
+    key = _key("regression_xss.html")
     assert _upload(key, b"<script>alert(1)</script>", "text/html").status_code == 200
     try:
         response = requests.get(f"{API_URL}/s3/file", params={"key": key}, timeout=10)
         assert response.status_code == 200
         assert response.headers["Content-Disposition"].startswith("attachment;")
-        assert 'filename="regression_xss.html"' in response.headers["Content-Disposition"]
+        assert f'filename="{key}"' in response.headers["Content-Disposition"]
         assert response.headers["X-Content-Type-Options"] == "nosniff"
         assert response.content == b"<script>alert(1)</script>"
     finally:
@@ -170,7 +176,7 @@ def test_s3_download_is_attachment_with_nosniff():
 
 def test_s3_download_key_with_quotes_and_unicode():
     """Verify keys with quotes or non-Latin-1 characters get a valid header instead of a 500."""
-    for key in ('résumé "v2".txt', "файл.txt"):
+    for key in (_key('résumé "v2".txt'), _key("файл.txt")):
         assert _upload(key, b"hello").status_code == 200
         try:
             response = requests.get(f"{API_URL}/s3/file", params={"key": key}, timeout=10)
@@ -194,7 +200,7 @@ def test_s3_download_key_with_quotes_and_unicode():
 
 def test_s3_upload_larger_than_nginx_default_succeeds():
     """Verify an upload over 1 MB (nginx's old default) but under the limit is stored intact."""
-    key = "regression_2mb.bin"
+    key = _key("regression_2mb.bin")
     content = os.urandom(2 * 1024 * 1024)
     response = _upload(key, content)
     try:
@@ -212,10 +218,11 @@ def test_s3_upload_over_limit_returns_413():
     # Send only the headers: the API must reject on the declared Content-Length
     # without reading the body. (Streaming an oversize body with requests would
     # race against the server closing the connection.)
+    key = _key("regression_too_large.bin")
     parsed = urlsplit(API_URL)
     conn = http.client.HTTPConnection(parsed.hostname, parsed.port or 80, timeout=10)
     try:
-        conn.putrequest("POST", "/s3/upload?filename=regression_too_large.bin")
+        conn.putrequest("POST", f"/s3/upload?filename={key}")
         conn.putheader("Content-Type", "application/octet-stream")
         conn.putheader("Content-Length", str(settings.S3_MAX_UPLOAD_BYTES + 1))
         conn.endheaders()
@@ -225,12 +232,12 @@ def test_s3_upload_over_limit_returns_413():
         conn.close()
 
     listing = requests.get(f"{API_URL}/s3/objects", timeout=10).json()
-    assert "regression_too_large.bin" not in [obj["key"] for obj in listing["objects"]]
+    assert key not in [obj["key"] for obj in listing["objects"]]
 
 
 def test_s3_upload_text_within_limit_succeeds():
     """Verify a normal text document upload still works."""
-    key = "regression_text.txt"
+    key = _key("regression_text.txt")
     response = requests.post(
         f"{API_URL}/s3/upload-text", json={"filename": key, "content": "héllo"}, timeout=10
     )
@@ -249,7 +256,7 @@ def test_s3_upload_text_over_limit_returns_413():
     # but over it once encoded.
     content = "é" * (settings.S3_MAX_UPLOAD_BYTES // 2 + 1)
     # ensure_ascii=False keeps the JSON body ~limit-sized instead of 3x ("é").
-    body = json.dumps({"filename": "regression_text_too_large.txt", "content": content}, ensure_ascii=False)
+    body = json.dumps({"filename": _key("regression_text_too_large.txt"), "content": content}, ensure_ascii=False)
     response = requests.post(
         f"{API_URL}/s3/upload-text",
         data=body.encode("utf-8"),

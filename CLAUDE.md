@@ -31,6 +31,25 @@
 - `<issue-number>-<short-kebab-case-slug>`, with no type prefix (no `fix/`, `feat/`).
   Examples: `24-speed-up-ci`, `8-dynamodb-attribute-types`, `29-critical-security-fixes`.
 
+## Splitting one issue across several PRs
+
+- **One sub-issue per PR.** Create it with the usual issue conventions, start the body with `Part of #<parent>`,
+  and link it with `gh api -X POST repos/<owner>/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<id>`
+  (`<id>` is the issue's numeric `id` from `gh api repos/<owner>/<repo>/issues/<n> --jq .id`, not its number).
+- **Link with `Fixes`, never `Refs`.** Commits end `Fixes #<sub-issue>`; the PR body starts
+  `Fixes #<sub-issue> (part of #<parent>)`. Never write `Fixes #<parent>` in a part: it would close the parent
+  while other parts are open. Close the parent by hand once every part has merged.
+- **Prefer independent PRs.** Branch each one from `develop` and open it with `--base develop`.
+- **Stack only when PR B needs PR A's code.** Branch B from A's branch, open B with `--base <A's branch>`, and
+  start its body with `Stacked on #<A> — merge that first`. CI runs on PRs to any base branch.
+- **After A merges.** Rebase merges rewrite commits, so B still carries A's old copies. GitHub retargets B to
+  `develop`; then `git rebase --onto origin/develop <old A tip> <B branch>`, push with
+  `--force-with-lease=<B branch>:<old B sha>`, and re-save B's PR body (`gh pr edit --body-file`) so the issue
+  link registers. Force-push PR branches only, never `develop`.
+- **Merge one PR at a time.** `develop` requires an up-to-date branch, so after each merge run
+  `gh pr update-branch <n> --rebase`, wait for CI, then `gh pr merge <n> --rebase` (rebase merge is the only
+  method the repo allows).
+
 ## Working style: parallel agents (always, without being asked)
 
 - Always split work across multiple agents running in parallel to speed things up. Don't wait to be asked.

@@ -23,11 +23,18 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dev tooling
-        run: pip install -r requirements-dev.txt
+      # Runtime deps too: the unit tests import the app's services.
+      - name: Install app deps and dev tooling
+        run: pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Run ruff
         run: ruff check .
+
+      # Service-level tests on fakeredis + moto: no Docker, network or
+      # running stack, so they report in seconds. The compose `test` service
+      # in the integration-test job also picks them up (it runs app/tests/).
+      - name: Run unit tests
+        run: pytest app/tests/unit -q -p no:cacheprovider
 
   integration-test:
     runs-on: ubuntu-latest
